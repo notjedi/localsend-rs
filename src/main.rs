@@ -1,3 +1,4 @@
 fn main() {
-    println!("Hello, world!");
+    localsend_core::send();
+    localsend_core::listen();
 }
