@@ -70,7 +70,7 @@ impl Server {
         }
     }
 
-    pub fn listen_multicast_annoucement(&mut self) {
+    pub fn listen_and_announce_multicast(&mut self) {
         self.socket
             .join_multicast_v4(&MULTICAST_ADDR, &INTERFACE_ADDR)
             .expect("failed to join multicast");

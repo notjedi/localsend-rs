@@ -6,5 +6,5 @@ fn main() {
     for _ in 0..localsend_core::NUM_REPEAT {
         server.announce_multicast(true);
     }
-    server.listen_multicast_annoucement();
+    server.listen_and_announce_multicast();
 }
