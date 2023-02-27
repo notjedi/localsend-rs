@@ -2,6 +2,7 @@ use serde::{Deserialize, Serialize};
 use std::net::Ipv4Addr;
 use std::net::UdpSocket;
 use std::str;
+use uuid::Uuid;
 
 const INTERFACE_ADDR: Ipv4Addr = Ipv4Addr::new(0, 0, 0, 0);
 const MULTICAST_ADDR: Ipv4Addr = Ipv4Addr::new(224, 0, 0, 167);
@@ -11,7 +12,6 @@ const BUFFER_SIZE: u16 = 4096;
 const ALIAS: &str = "rustsend";
 const DEVICE_MODEL: &str = "linux";
 const DEVICE_TYPE: &str = "desktop";
-const FINGERPRINT: &str = "bc77065d-42fd-4936-a89f-e0b8c628d2c8";
 
 // todo use snake_case serde rename trick
 #[derive(Debug, Default, Serialize, Deserialize)]
@@ -31,13 +31,18 @@ pub struct Device {
 
 pub struct Server {
     socket: UdpSocket,
+    fingerprint: uuid::Uuid,
 }
 
 impl Server {
     pub fn new() -> Self {
         let socket =
             UdpSocket::bind((INTERFACE_ADDR, MULTICAST_PORT)).expect("couldn't bind to address'");
-        Self { socket }
+        let fingerprint = Uuid::new_v4();
+        Self {
+            socket,
+            fingerprint,
+        }
     }
 
     pub fn listen_multicast_annoucement(&self) {
@@ -59,7 +64,7 @@ impl Server {
         let device = Device {
             alias: ALIAS.to_string(),
             announcement: true,
-            fingerprint: FINGERPRINT.to_string(),
+            fingerprint: self.fingerprint.to_string(),
             device_type: DEVICE_TYPE.to_string(),
             device_model: Some(DEVICE_MODEL.to_string()),
             ..Default::default()
