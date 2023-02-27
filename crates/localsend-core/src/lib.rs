@@ -29,8 +29,15 @@ pub struct Device {
     port: u16,
 }
 
+impl PartialEq for Device {
+    fn eq(&self, other: &Self) -> bool {
+        self.fingerprint == other.fingerprint
+    }
+}
+
 pub struct Server {
     socket: UdpSocket,
+    devices: Vec<Device>,
     fingerprint: uuid::Uuid,
 }
 
@@ -42,10 +49,11 @@ impl Server {
         Self {
             socket,
             fingerprint,
+            devices: vec![],
         }
     }
 
-    pub fn listen_multicast_annoucement(&self) {
+    pub fn listen_multicast_annoucement(&mut self) {
         self.socket
             .join_multicast_v4(&MULTICAST_ADDR, &INTERFACE_ADDR)
             .expect("failed to join multicast");
@@ -56,7 +64,13 @@ impl Server {
             let mut data: Device = serde_json::from_slice(&buf[..amt]).unwrap();
             data.ip = src.ip().to_string();
             data.port = src.port();
-            println!("{:?}", data);
+            if !self.devices.contains(&data) {
+                self.devices.push(data);
+                dbg!(&self.devices);
+                dbg!(&self.devices.len());
+            } else {
+                println!("{:?}", data);
+            }
         }
     }
 
@@ -71,8 +85,6 @@ impl Server {
         };
 
         let announcement_msg = serde_json::to_string(&device).unwrap();
-        dbg!(&device);
-        dbg!(&announcement_msg);
         self.socket
             .send_to(
                 &announcement_msg.as_bytes(),

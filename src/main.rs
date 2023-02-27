@@ -1,7 +1,7 @@
 use localsend_core::Server;
 
 fn main() {
-    let server = Server::new();
+    let mut server = Server::new();
     server.announce_multicast();
     server.listen_multicast_annoucement();
 }
