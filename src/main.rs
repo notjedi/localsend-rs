@@ -1,4 +1,7 @@
+use localsend_core::Server;
+
 fn main() {
-    localsend_core::send();
-    localsend_core::listen();
+    let server = Server::new();
+    server.announce_multicast();
+    server.listen_multicast_annoucement();
 }
