@@ -9,6 +9,8 @@ const INTERFACE_ADDR: Ipv4Addr = Ipv4Addr::new(0, 0, 0, 0);
 const MULTICAST_ADDR: Ipv4Addr = Ipv4Addr::new(224, 0, 0, 167);
 const MULTICAST_PORT: u16 = 53317;
 const BUFFER_SIZE: u16 = 4096;
+const READ_TIMEOUT: u64 = 5;
+
 pub const NUM_REPEAT: u8 = 4;
 
 const ALIAS: &str = "rustsend";
@@ -34,7 +36,8 @@ pub struct Device {
 impl PartialEq for Device {
     // https://www.reddit.com/r/rust/comments/t8d6wb/comment/hznabrt
     fn eq(&self, other: &Self) -> bool {
-        // self.fingerprint == other.fingerprint && self.ip == other.ip && self.port == other.port
+        // self.ip == other.ip
+        // self.fingerprint == other.fingerprint && self.ip == other.ip
         self.fingerprint == other.fingerprint
     }
 }
@@ -50,7 +53,7 @@ impl Server {
         let socket =
             UdpSocket::bind((INTERFACE_ADDR, MULTICAST_PORT)).expect("couldn't bind to address");
         socket
-            .set_read_timeout(Some(Duration::new(5, 0)))
+            .set_read_timeout(Some(Duration::new(READ_TIMEOUT, 0)))
             .expect("failed to set read timeout");
         let fingerprint = Uuid::new_v4();
         // TODO: set ip addr
@@ -71,6 +74,7 @@ impl Server {
     }
 
     pub fn listen_and_announce_multicast(&mut self) {
+        // https://gist.github.com/pusateri/df98511b88e9000f388d344a1f3db9e7
         self.socket
             .join_multicast_v4(&MULTICAST_ADDR, &INTERFACE_ADDR)
             .expect("failed to join multicast");
@@ -89,10 +93,11 @@ impl Server {
                         self.announce_multicast(false);
                     }
 
-                    match self.devices.iter().position(|dev| *dev == device) {
+                    match self.devices.iter().position(|dev| *dev.ip == device.ip) {
                         Some(index) => {
                             // update existing device
                             self.devices[index] = device;
+                            dbg!(&self.devices);
                         }
                         None => {
                             // New device
@@ -103,6 +108,7 @@ impl Server {
                     }
                 }
                 Err(_) => {
+                    // announce every 5 seconds
                     self.announce_multicast(true);
                 }
             }
