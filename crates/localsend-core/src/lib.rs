@@ -5,9 +5,11 @@ use std::str;
 use std::time::Duration;
 use uuid::Uuid;
 
-const INTERFACE_ADDR: Ipv4Addr = Ipv4Addr::new(0, 0, 0, 0);
-const MULTICAST_ADDR: Ipv4Addr = Ipv4Addr::new(224, 0, 0, 167);
-const MULTICAST_PORT: u16 = 53317;
+use tracing::debug;
+
+pub const INTERFACE_ADDR: Ipv4Addr = Ipv4Addr::new(0, 0, 0, 0);
+pub const MULTICAST_ADDR: Ipv4Addr = Ipv4Addr::new(224, 0, 0, 167);
+pub const MULTICAST_PORT: u16 = 53317;
 const BUFFER_SIZE: u16 = 4096;
 const READ_TIMEOUT: u64 = 5;
 
@@ -97,13 +99,12 @@ impl Server {
                         Some(index) => {
                             // update existing device
                             self.devices[index] = device;
-                            dbg!(&self.devices);
                         }
                         None => {
                             // New device
                             self.devices.push(device);
-                            dbg!(&self.devices);
-                            dbg!(&self.devices.len());
+                            debug!("{:#?}", &self.devices);
+                            debug!("{:#?}", &self.devices.len());
                         }
                     }
                 }
@@ -124,5 +125,6 @@ impl Server {
                 (MULTICAST_ADDR, MULTICAST_PORT),
             )
             .unwrap();
+        // debug!("Announcing {}", announcement);
     }
 }
