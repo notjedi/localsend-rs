@@ -13,7 +13,13 @@ repository = "https://github.com/notjedi/localsend-rs"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+axum = "0.6.10"
+axum-server = { version = "0.4.6", features = ["tls-rustls"] }
 localsend-core = { path = "crates/localsend-core", package = "localsend-core" }
+rcgen = "0.10.0"
+tokio = { version = "1.26.0", features = ["full"] }
+tracing = "0.1.37"
+tracing-subscriber = "0.3.16"
 
 [workspace]
 members = [
