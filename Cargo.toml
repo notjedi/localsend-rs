@@ -14,8 +14,10 @@ repository = "https://github.com/notjedi/localsend-rs"
 
 [dependencies]
 axum = "0.6.10"
-axum-server = { version = "0.4.6", features = ["tls-rustls"] }
+# axum-server = { version = "0.4.6", features = ["tls-rustls"] }
+axum-server = { path = "crates/axum-server", package = "axum-server", features = ["tls-rustls"] }
 localsend-core = { path = "crates/localsend-core", package = "localsend-core" }
+log = "0.4.17"
 rcgen = "0.10.0"
 tokio = { version = "1.26.0", features = ["full"] }
 tracing = "0.1.37"
@@ -24,4 +26,6 @@ tracing-subscriber = "0.3.16"
 [workspace]
 members = [
     "crates/localsend-core",
+    "crates/axum-server",
+    "crates/rustls",
 ]

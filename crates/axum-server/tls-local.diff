@@ -1,0 +1,68 @@
+diff --git a/Cargo.toml b/Cargo.toml
+index 5ab7f02..e25f279 100644
+--- a/Cargo.toml
++++ b/Cargo.toml
+@@ -27,9 +27,11 @@ tower-service = "0.3"
+ # optional dependencies
+ arc-swap = { version = "1", optional = true }
+ pin-project-lite = { version = "0.2", optional = true }
+-rustls = { version = "0.20", features = ["dangerous_configuration"], optional = true }
++# rustls = { version = "0.20", features = ["dangerous_configuration"], optional = true }
++rustls = { path = "../rustls", package = "rustls", features = ["dangerous_configuration"], optional = true }
+ rustls-pemfile = { version = "1", optional = true }
+-tokio-rustls = { version = "0.23", optional = true }
++# tokio-rustls = { version = "0.23", optional = true }
++tokio-rustls = { path = "../tokio-rustls", package = "tokio-rustls", optional = true }
+ 
+ [dev-dependencies]
+ axum = "0.6"
+diff --git a/src/lib.rs b/src/lib.rs
+index 1c3a6ed..844bd1e 100644
+--- a/src/lib.rs
++++ b/src/lib.rs
+@@ -65,7 +65,7 @@
+ //! [`RustlsConfig`]: crate::tls_rustls::RustlsConfig
+ //! [`SocketAddr`]: std::net::SocketAddr
+ 
+-#![forbid(unsafe_code)]
++// #![forbid(unsafe_code)]
+ #![warn(
+     clippy::await_holding_lock,
+     clippy::cargo_common_metadata,
+diff --git a/src/tls_rustls/future.rs b/src/tls_rustls/future.rs
+index 5b7594b..3e2d6b5 100644
+--- a/src/tls_rustls/future.rs
++++ b/src/tls_rustls/future.rs
+@@ -3,6 +3,7 @@
+ use crate::tls_rustls::RustlsConfig;
+ use pin_project_lite::pin_project;
+ use std::io::{Error, ErrorKind};
++use std::sync::Arc;
+ use std::time::Duration;
+ use std::{
+     fmt,
+@@ -76,12 +77,19 @@ where
+                 } => {
+                     match future.poll(cx) {
+                         Poll::Ready(Ok((stream, service))) => {
+-                            let server_config = this.config
+-                                .take()
+-                                .expect("config is not set. this is a bug in axum-server, please report")
+-                                .get_inner();
++                            let server_config = this.config.take().expect(
++                            "config is not set. this is a bug in axum-server, please report",
++                        ).get_inner();
+ 
+-                            let acceptor = TlsAcceptor::from(server_config);
++                            let tokio_server_config = unsafe {
++                                std::mem::transmute::<
++                                    Arc<rustls::ServerConfig>,
++                                    Arc<tokio_rustls::rustls::ServerConfig>,
++                                >(server_config)
++                            };
++                            let acceptor = TlsAcceptor::from(tokio_server_config);
++
++                            // let acceptor = TlsAcceptor::from(server_config);
+                             let future = acceptor.accept(stream);
+ 
+                             let service = Some(service);

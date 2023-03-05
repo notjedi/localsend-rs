@@ -1,4 +1,6 @@
 use axum::{
+    extract::Json,
+    extract::RawBody,
     extract::RawForm,
     response::Html,
     routing::{get, post},
@@ -6,18 +8,51 @@ use axum::{
 };
 use axum_server::tls_rustls::RustlsConfig;
 use localsend_core::Server;
+use log::{LevelFilter, Metadata, Record};
 use rcgen::Certificate;
 use std::net::SocketAddr;
-use tracing::info;
-use tracing::Level;
+use tracing::{info, Level};
 use tracing_subscriber::FmtSubscriber;
+
+struct MyLogger;
+
+impl log::Log for MyLogger {
+    fn enabled(&self, metadata: &Metadata) -> bool {
+        false
+        // use log::Level;
+        // metadata.level() <= Level::Info
+    }
+
+    fn log(&self, record: &Record) {
+        if self.enabled(record.metadata()) {
+            println!(
+                "{:?}:{:?} - {} - {}",
+                record.file(),
+                record.line(),
+                record.level(),
+                record.args()
+            );
+        }
+    }
+    fn flush(&self) {}
+}
 
 #[tokio::main]
 async fn main() {
+    static MY_LOGGER: MyLogger = MyLogger;
+
+    // log::set_logger(&MY_LOGGER).unwrap();
+    // log::set_max_level(LevelFilter::Trace);
+    // log::trace!("hi");
+    // log::info!("hi");
+    // log::warn!("hi");
+    // log::debug!("hi");
+    // log::error!("hi");
+
     // let subscriber = FmtSubscriber::new();
     // TODO: use env filter
     let subscriber = FmtSubscriber::builder()
-        .with_max_level(Level::DEBUG)
+        .with_max_level(Level::INFO)
         .finish();
     tracing::subscriber::set_global_default(subscriber).expect("setting default subscriber failed");
 
@@ -36,10 +71,7 @@ async fn main() {
         .route("/", get(handler))
         .route("/api/localsend/v1/send-request", post(send_request));
 
-    let addr = SocketAddr::from((
-        localsend_core::INTERFACE_ADDR,
-        localsend_core::MULTICAST_PORT,
-    ));
+    let addr = SocketAddr::from(([192, 168, 1, 2], localsend_core::MULTICAST_PORT));
     info!("listening on {}", addr);
     axum_server::bind_rustls(addr, config)
         .serve(app.into_make_service())
@@ -56,9 +88,11 @@ async fn announce_multicast() {
     // }
 }
 
-async fn send_request(RawForm(form): RawForm) -> Html<&'static str> {
+// async fn send_request(RawForm(form): RawForm) -> &'static str {
+// async fn send_request(RawBody(form): RawBody) -> &'static str {
+async fn send_request(RawBody(form): RawBody) -> &'static str {
     info!("got request {:?}", form);
-    Html("<h1>Hello from send-request</h1>")
+    r#"{"some file id": "some token",  "another file id": "some other token"}"#
 }
 
 async fn handler() -> Html<&'static str> {
@@ -67,10 +101,27 @@ async fn handler() -> Html<&'static str> {
 
 fn generate_tls_cert() -> Certificate {
     use rcgen::{CertificateParams, DnType, DnValue};
-    let mut params: CertificateParams = Default::default();
+    // let mut params: CertificateParams = Default::default();
+    let mut params =
+        CertificateParams::new(vec!["localsend.rs".to_string(), "localhost".to_string()]);
     params.distinguished_name.push(
         DnType::CommonName,
         DnValue::PrintableString("Localsend client".to_string()),
     );
+    params
+        .distinguished_name
+        .push(DnType::OrganizationName, "".to_string());
+    params
+        .distinguished_name
+        .push(DnType::OrganizationalUnitName, "".to_string());
+    params
+        .distinguished_name
+        .push(DnType::LocalityName, "".to_string());
+    params
+        .distinguished_name
+        .push(DnType::StateOrProvinceName, "".to_string());
+    params
+        .distinguished_name
+        .push(DnType::CountryName, "".to_string());
     Certificate::from_params(params).unwrap()
 }
