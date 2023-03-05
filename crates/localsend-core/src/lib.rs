@@ -41,8 +41,8 @@ impl PartialEq for Device {
     fn eq(&self, other: &Self) -> bool {
         // TODO: decide on the best comparision method
         // self.ip == other.ip
-        // self.fingerprint == other.fingerprint && self.ip == other.ip
-        self.fingerprint == other.fingerprint
+        // self.fingerprint == other.fingerprint
+        self.fingerprint == other.fingerprint && self.ip == other.ip
     }
 }
 

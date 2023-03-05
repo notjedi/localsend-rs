@@ -47,7 +47,7 @@ async fn main() {
         .unwrap();
 
     // spawn task to listen and announce multicast messages
-    tokio::spawn(announce_multicast());
+    tokio::spawn(listen_and_announce_multicast());
 
     let app = Router::new()
         .route("/", get(handler))
@@ -61,7 +61,7 @@ async fn main() {
         .unwrap();
 }
 
-async fn announce_multicast() {
+async fn listen_and_announce_multicast() {
     let mut server = Server::new();
     server.listen_and_announce_multicast();
 }
@@ -90,9 +90,8 @@ fn init_logger(level: log::LevelFilter) {
 
 fn generate_tls_cert() -> Certificate {
     use rcgen::{CertificateParams, DnType, DnValue};
-    // let mut params: CertificateParams = Default::default();
-    let mut params =
-        CertificateParams::new(vec!["localsend.rs".to_string(), "localhost".to_string()]);
+    let mut params: CertificateParams = Default::default();
+    // TODO: can we do `From` hashmap
     params.distinguished_name.push(
         DnType::CommonName,
         DnValue::PrintableString("Localsend client".to_string()),
