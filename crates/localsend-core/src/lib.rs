@@ -1,11 +1,12 @@
 use serde::{Deserialize, Serialize};
-use std::net::Ipv4Addr;
 use std::net::UdpSocket;
+use std::net::{IpAddr, Ipv4Addr};
 use std::str;
 use std::time::Duration;
+use tracing::{debug, trace};
 use uuid::Uuid;
 
-use tracing::debug;
+mod utils;
 
 pub const INTERFACE_ADDR: Ipv4Addr = Ipv4Addr::new(0, 0, 0, 0);
 pub const MULTICAST_ADDR: Ipv4Addr = Ipv4Addr::new(224, 0, 0, 167);
@@ -20,7 +21,7 @@ const DEVICE_MODEL: &str = "linux";
 const DEVICE_TYPE: &str = "desktop";
 
 // todo use snake_case serde rename trick
-#[derive(Debug, Default, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct Device {
     alias: String,
     announcement: bool,
@@ -38,6 +39,7 @@ pub struct Device {
 impl PartialEq for Device {
     // https://www.reddit.com/r/rust/comments/t8d6wb/comment/hznabrt
     fn eq(&self, other: &Self) -> bool {
+        // TODO: decide on the best comparision method
         // self.ip == other.ip
         // self.fingerprint == other.fingerprint && self.ip == other.ip
         self.fingerprint == other.fingerprint
@@ -58,14 +60,18 @@ impl Server {
             .set_read_timeout(Some(Duration::new(READ_TIMEOUT, 0)))
             .expect("failed to set read timeout");
         let fingerprint = Uuid::new_v4();
-        // TODO: set ip addr
+
+        let ip_addr = utils::get_device_ip_addr().unwrap_or(IpAddr::V4([0, 0, 0, 0].into()));
+
         let this_device = Device {
             alias: ALIAS.to_string(),
             announcement: true,
             fingerprint: fingerprint.to_string(),
             device_type: DEVICE_TYPE.to_string(),
             device_model: Some(DEVICE_MODEL.to_string()),
-            ..Default::default()
+            ip: ip_addr.to_string(),
+            // TODO: change this to user's config port later on
+            port: 53317,
         };
 
         Self {
@@ -87,10 +93,14 @@ impl Server {
                 Ok((amt, src)) => {
                     let mut device: Device = serde_json::from_slice(&buf[..amt]).unwrap();
                     (device.ip, device.port) = (src.ip().to_string(), src.port());
-                    // ignore self, also note that self.this_device.ip = "", so data == this_device won't work
-                    if device.fingerprint == self.this_device.fingerprint {
+
+                    // NOTE: self.this_device.ip may be 0.0.0.0 if the program fails to find
+                    // a network interface or the machine might have multiple non-loopback
+                    // interfaces and the IP we received might be different than what we have
+                    if device == self.this_device {
                         continue;
                     }
+
                     if device.announcement {
                         self.announce_multicast(false);
                     }
@@ -111,6 +121,10 @@ impl Server {
                 Err(_) => {
                     // announce every 5 seconds
                     self.announce_multicast(true);
+                    // https://github.com/localsend/protocol/issues/1#issuecomment-1426998509
+                    // for _ in 0..NUM_REPEAT {
+                    //     self.announce_multicast(true);
+                    // }
                 }
             }
         }
@@ -125,6 +139,6 @@ impl Server {
                 (MULTICAST_ADDR, MULTICAST_PORT),
             )
             .unwrap();
-        // debug!("Announcing {}", announcement);
+        trace!("Announcing {}", announcement);
     }
 }
