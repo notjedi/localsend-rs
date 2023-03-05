@@ -1,8 +1,7 @@
 use axum::{
-    extract::RawBody,
     response::Html,
     routing::{get, post},
-    Router,
+    Json, Router,
 };
 use axum_server::tls_rustls::RustlsConfig;
 use localsend_core::Server;
@@ -66,8 +65,8 @@ async fn listen_and_announce_multicast() {
     server.listen_and_announce_multicast();
 }
 
-async fn send_request(RawBody(form): RawBody) -> &'static str {
-    info!("got request {:?}", form);
+async fn send_request(Json(send_request): Json<localsend_core::SendRequest>) -> &'static str {
+    info!("got request {:#?}", send_request);
     r#"{"some file id": "some token",  "another file id": "some other token"}"#
 }
 

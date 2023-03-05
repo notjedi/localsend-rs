@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::net::UdpSocket;
 use std::net::{IpAddr, Ipv4Addr};
 use std::str;
@@ -20,7 +21,9 @@ const ALIAS: &str = "rustsend";
 const DEVICE_MODEL: &str = "linux";
 const DEVICE_TYPE: &str = "desktop";
 
-// todo use snake_case serde rename trick
+// TODO: use snake_case serde rename trick
+// TODO: change all String to &str type
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Device {
     alias: String,
@@ -44,6 +47,32 @@ impl PartialEq for Device {
         // self.fingerprint == other.fingerprint
         self.fingerprint == other.fingerprint && self.ip == other.ip
     }
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct LegacyResponse {
+    alias: String,
+    #[serde(rename = "deviceType")]
+    device_type: String,
+    #[serde(rename = "deviceModel")]
+    device_model: Option<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct FileInfo {
+    id: String,
+    size: usize, // bytes
+    #[serde(rename = "fileName")]
+    file_name: String,
+    #[serde(rename = "fileType")]
+    file_type: String, // image | video | pdf | text | other
+                       // preview_data: type? // nullable
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct SendRequest {
+    info: LegacyResponse,
+    files: HashMap<String, FileInfo>,
 }
 
 pub struct Server {
