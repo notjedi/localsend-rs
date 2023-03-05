@@ -18,6 +18,7 @@ axum-server = { version = "0.4.6", features = ["tls-rustls"] }
 localsend-core = { path = "crates/localsend-core", package = "localsend-core" }
 rcgen = "0.10.0"
 tokio = { version = "1.26.0", features = ["full"] }
+log = "0.4.17"
 tracing = "0.1.37"
 tracing-subscriber = "0.3.16"
 
