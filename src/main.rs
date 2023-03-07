@@ -46,7 +46,12 @@ async fn main() {
         .unwrap();
 
     // spawn task to listen and announce multicast messages
-    tokio::spawn(listen_and_announce_multicast());
+    tokio::task::spawn_blocking(|| {
+        let mut server = Server::new();
+        server.announce_multicast_repeated();
+        server.listen_and_announce_multicast();
+    });
+    // tokio::spawn(listen_and_announce_multicast());
 
     let app = Router::new()
         .route("/", get(handler))
@@ -60,10 +65,10 @@ async fn main() {
         .unwrap();
 }
 
-async fn listen_and_announce_multicast() {
-    let mut server = Server::new();
-    server.listen_and_announce_multicast();
-}
+// async fn listen_and_announce_multicast() {
+//     let mut server = Server::new();
+//     server.listen_and_announce_multicast();
+// }
 
 async fn send_request(Json(send_request): Json<localsend_core::SendRequest>) -> &'static str {
     info!("got request {:#?}", send_request);

@@ -149,11 +149,7 @@ impl Server {
                 }
                 Err(_) => {
                     // announce every 5 seconds
-                    self.announce_multicast(true);
-                    // https://github.com/localsend/protocol/issues/1#issuecomment-1426998509
-                    // for _ in 0..NUM_REPEAT {
-                    //     self.announce_multicast(true);
-                    // }
+                    self.announce_multicast_repeated();
                 }
             }
         }
@@ -168,6 +164,13 @@ impl Server {
                 (MULTICAST_ADDR, MULTICAST_PORT),
             )
             .unwrap();
-        trace!("Announcing {}", announcement);
+    }
+
+    pub fn announce_multicast_repeated(&mut self) {
+        // https://github.com/localsend/protocol/issues/1#issuecomment-1426998509
+        for _ in 0..NUM_REPEAT {
+            self.announce_multicast(true);
+        }
+        trace!("Announcing");
     }
 }
