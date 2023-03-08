@@ -1,9 +1,5 @@
 use crate::utils;
-use axum::{
-    response::Html,
-    routing::{get, post},
-    Json, Router,
-};
+use axum::{routing::post, Json, Router};
 use axum_server::tls_rustls::RustlsConfig;
 use std::collections::HashMap;
 use std::net::SocketAddr;
@@ -28,9 +24,7 @@ impl Server {
             .await
             .unwrap();
 
-        let app = Router::new()
-            .route("/", get(Self::handler))
-            .route("/api/localsend/v1/send-request", post(Self::send_request));
+        let app = Router::new().route("/api/localsend/v1/send-request", post(Self::send_request));
 
         let addr = SocketAddr::from(([0, 0, 0, 0], crate::MULTICAST_PORT));
         info!("listening on {}", addr);
@@ -52,9 +46,5 @@ impl Server {
         });
         trace!("{:#?}", wanted_files);
         Json(wanted_files)
-    }
-
-    async fn handler() -> Html<&'static str> {
-        Html("<h1>Hello, World!</h1>")
     }
 }
