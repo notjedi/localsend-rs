@@ -43,17 +43,17 @@ pub struct LegacyResponse {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct FileInfo {
-    id: String,
-    size: usize, // bytes
+    pub id: String,
+    pub size: usize, // bytes
     #[serde(rename = "fileName")]
-    file_name: String,
+    pub file_name: String,
     #[serde(rename = "fileType")]
-    file_type: String, // image | video | pdf | text | other
-                       // preview_data: type? // nullable
+    pub file_type: String, // image | video | pdf | text | other
+                           // preview_data: type? // nullable
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct SendRequest {
     info: LegacyResponse,
-    files: HashMap<String, FileInfo>,
+    pub files: HashMap<String, FileInfo>,
 }

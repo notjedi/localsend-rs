@@ -4,9 +4,10 @@ use axum::{
     Json, Router,
 };
 use axum_server::tls_rustls::RustlsConfig;
-use std::net::Ipv4Addr;
 use std::net::SocketAddr;
-use tracing::info;
+use std::{collections::HashMap, net::Ipv4Addr};
+use tracing::{info, trace};
+use uuid::Uuid;
 
 pub mod device_scanner;
 pub mod protos;
@@ -57,9 +58,19 @@ impl Server {
             .unwrap();
     }
 
-    async fn send_request(Json(send_request): Json<crate::SendRequest>) -> &'static str {
-        info!("got request {:#?}", send_request);
-        r#"{"some file id": "some token",  "another file id": "some other token"}"#
+    async fn send_request(
+        Json(send_request): Json<crate::SendRequest>,
+    ) -> Json<HashMap<String, String>> {
+        trace!("got request {:#?}", send_request);
+
+        let mut wanted_files: HashMap<String, String> = HashMap::new();
+        send_request.files.into_iter().for_each(|(file_id, _)| {
+            let token = Uuid::new_v4();
+            wanted_files.insert(file_id, token.to_string());
+        });
+        // let response_json = serde_json::to_string(&wanted_files).unwrap();
+        dbg!(&wanted_files);
+        Json(wanted_files)
     }
 
     async fn handler() -> Html<&'static str> {
