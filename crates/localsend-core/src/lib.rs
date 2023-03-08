@@ -75,13 +75,13 @@ pub struct SendRequest {
     files: HashMap<String, FileInfo>,
 }
 
-pub struct Server {
+pub struct DeviceScanner {
     socket: UdpSocket,
     this_device: Device,
     devices: Vec<Device>,
 }
 
-impl Server {
+impl DeviceScanner {
     pub fn new() -> Self {
         let socket =
             UdpSocket::bind((INTERFACE_ADDR, MULTICAST_PORT)).expect("couldn't bind to address");

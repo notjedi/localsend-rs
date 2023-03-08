@@ -4,7 +4,7 @@ use axum::{
     Json, Router,
 };
 use axum_server::tls_rustls::RustlsConfig;
-use localsend_core::Server;
+use localsend_core::DeviceScanner;
 use log::{Metadata, Record};
 use rcgen::Certificate;
 use std::net::SocketAddr;
@@ -46,12 +46,7 @@ async fn main() {
         .unwrap();
 
     // spawn task to listen and announce multicast messages
-    tokio::task::spawn_blocking(|| {
-        let mut server = Server::new();
-        server.announce_multicast_repeated();
-        server.listen_and_announce_multicast();
-    });
-    // tokio::spawn(listen_and_announce_multicast());
+    start_device_scanner();
 
     let app = Router::new()
         .route("/", get(handler))
@@ -65,10 +60,16 @@ async fn main() {
         .unwrap();
 }
 
-// async fn listen_and_announce_multicast() {
-//     let mut server = Server::new();
-//     server.listen_and_announce_multicast();
-// }
+fn start_device_scanner() {
+    // NOTE: https://ryhl.io/blog/async-what-is-blocking recommends that we run functions that run
+    // forever in a separate thread.
+    tokio::task::spawn_blocking(|| {
+        let mut server = DeviceScanner::new();
+        server.announce_multicast_repeated();
+        server.listen_and_announce_multicast();
+    });
+    // std::thread::sleep(std::time::Duration::from_secs(5));
+}
 
 async fn send_request(Json(send_request): Json<localsend_core::SendRequest>) -> &'static str {
     info!("got request {:#?}", send_request);
