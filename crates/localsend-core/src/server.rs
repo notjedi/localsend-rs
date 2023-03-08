@@ -18,6 +18,12 @@ pub struct Server {
     certificate: rcgen::Certificate,
 }
 
+impl Default for Server {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Server {
     pub fn new() -> Self {
         Self {
@@ -59,32 +65,26 @@ impl Server {
     }
 
     async fn incoming_send_post(params: Query<SendInfo>, file_stream: BodyStream) {
+        trace!("{:?}", &params);
         stream_to_file("hi", file_stream).await;
-        // dbg!(&file_stream);
-        // let body_bytes = hyper::body::to_bytes(body).await;
-        // Ok(String::from_utf8(bytes.to_vec()).expect("response was not valid utf-8"))
     }
 }
 
+// from: https://github.com/tokio-rs/axum/blob/main/examples/stream-to-file/src/main.rs
 async fn stream_to_file<S, E>(path: &str, stream: S)
 where
     S: Stream<Item = Result<Bytes, E>>,
     E: Into<BoxError>,
 {
-    // if !path_is_valid(path) {
-    //     return Err((StatusCode::BAD_REQUEST, "Invalid path".to_owned()));
-    // }
-
     // Convert the stream into an `AsyncRead`.
     let body_with_io_error = stream.map_err(|err| io::Error::new(io::ErrorKind::Other, err));
     let body_reader = StreamReader::new(body_with_io_error);
     futures::pin_mut!(body_reader);
 
     // Create the file. `File` implements `AsyncWrite`.
-    // let path = std::path::Path::new(UPLOADS_DIRECTORY).join(path);
-    // let mut file = BufWriter::new(File::create(path).await);
-
-    let mut file = BufWriter::new(tokio::io::stdout());
+    let path = std::path::Path::new(path);
+    let mut file = BufWriter::new(File::create(path).await.unwrap());
+    // let mut file = BufWriter::new(tokio::io::stdout());
 
     // Copy the body into the file.
     tokio::io::copy(&mut body_reader, &mut file).await.unwrap();

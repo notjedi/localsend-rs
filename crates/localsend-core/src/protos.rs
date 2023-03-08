@@ -26,10 +26,6 @@ impl PartialEq for Device {
         // self.fingerprint == other.fingerprint
         self.fingerprint == other.fingerprint && self.ip == other.ip
     }
-
-    fn ne(&self, other: &Self) -> bool {
-        !self.eq(other)
-    }
 }
 
 #[derive(Debug, Serialize, Deserialize)]

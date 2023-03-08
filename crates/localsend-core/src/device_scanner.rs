@@ -16,6 +16,12 @@ pub struct DeviceScanner {
     devices: Vec<Device>,
 }
 
+impl Default for DeviceScanner {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl DeviceScanner {
     pub fn new() -> Self {
         let socket =
@@ -95,7 +101,7 @@ impl DeviceScanner {
         let announcement_msg = serde_json::to_string(&self.this_device).unwrap();
         self.socket
             .send_to(
-                &announcement_msg.as_bytes(),
+                announcement_msg.as_bytes(),
                 (MULTICAST_ADDR, MULTICAST_PORT),
             )
             .unwrap();
