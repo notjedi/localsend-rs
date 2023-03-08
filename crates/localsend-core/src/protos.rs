@@ -57,3 +57,10 @@ pub struct SendRequest {
     info: LegacyResponse,
     pub files: HashMap<String, FileInfo>,
 }
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct SendInfo {
+    #[serde(rename = "fileId")]
+    pub file_id: String,
+    pub token: String,
+}

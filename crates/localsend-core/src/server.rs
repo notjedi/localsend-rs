@@ -1,8 +1,16 @@
-use crate::utils;
-use axum::{routing::post, Json, Router};
+use crate::{utils, SendInfo};
+use axum::{
+    body::Bytes,
+    extract::{BodyStream, Query},
+    routing::post,
+    BoxError, Json, Router,
+};
 use axum_server::tls_rustls::RustlsConfig;
+use futures::{Stream, TryStreamExt};
 use std::collections::HashMap;
-use std::net::SocketAddr;
+use std::{io, net::SocketAddr};
+use tokio::{fs::File, io::BufWriter};
+use tokio_util::io::StreamReader;
 use tracing::{info, trace};
 use uuid::Uuid;
 
@@ -24,7 +32,9 @@ impl Server {
             .await
             .unwrap();
 
-        let app = Router::new().route("/api/localsend/v1/send-request", post(Self::send_request));
+        let app = Router::new()
+            .route("/api/localsend/v1/send-request", post(Self::send_request))
+            .route("/api/localsend/v1/send", post(Self::incoming_send_post));
 
         let addr = SocketAddr::from(([0, 0, 0, 0], crate::MULTICAST_PORT));
         info!("listening on {}", addr);
@@ -47,4 +57,35 @@ impl Server {
         trace!("{:#?}", wanted_files);
         Json(wanted_files)
     }
+
+    async fn incoming_send_post(params: Query<SendInfo>, file_stream: BodyStream) {
+        stream_to_file("hi", file_stream).await;
+        // dbg!(&file_stream);
+        // let body_bytes = hyper::body::to_bytes(body).await;
+        // Ok(String::from_utf8(bytes.to_vec()).expect("response was not valid utf-8"))
+    }
+}
+
+async fn stream_to_file<S, E>(path: &str, stream: S)
+where
+    S: Stream<Item = Result<Bytes, E>>,
+    E: Into<BoxError>,
+{
+    // if !path_is_valid(path) {
+    //     return Err((StatusCode::BAD_REQUEST, "Invalid path".to_owned()));
+    // }
+
+    // Convert the stream into an `AsyncRead`.
+    let body_with_io_error = stream.map_err(|err| io::Error::new(io::ErrorKind::Other, err));
+    let body_reader = StreamReader::new(body_with_io_error);
+    futures::pin_mut!(body_reader);
+
+    // Create the file. `File` implements `AsyncWrite`.
+    // let path = std::path::Path::new(UPLOADS_DIRECTORY).join(path);
+    // let mut file = BufWriter::new(File::create(path).await);
+
+    let mut file = BufWriter::new(tokio::io::stdout());
+
+    // Copy the body into the file.
+    tokio::io::copy(&mut body_reader, &mut file).await.unwrap();
 }
