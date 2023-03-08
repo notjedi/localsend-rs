@@ -1,3 +1,4 @@
+use rcgen::{Certificate, CertificateParams, DnType, DnValue};
 use std::net::IpAddr;
 
 use network_interface::{NetworkInterface, NetworkInterfaceConfig};
@@ -17,4 +18,29 @@ pub fn get_device_ip_addr() -> Option<IpAddr> {
         };
     }
     None
+}
+
+pub fn generate_tls_cert() -> Certificate {
+    let mut params: CertificateParams = Default::default();
+    // TODO: can we do `From` hashmap
+    params.distinguished_name.push(
+        DnType::CommonName,
+        DnValue::PrintableString("Localsend client".to_string()),
+    );
+    params
+        .distinguished_name
+        .push(DnType::OrganizationName, "".to_string());
+    params
+        .distinguished_name
+        .push(DnType::OrganizationalUnitName, "".to_string());
+    params
+        .distinguished_name
+        .push(DnType::LocalityName, "".to_string());
+    params
+        .distinguished_name
+        .push(DnType::StateOrProvinceName, "".to_string());
+    params
+        .distinguished_name
+        .push(DnType::CountryName, "".to_string());
+    Certificate::from_params(params).unwrap()
 }
