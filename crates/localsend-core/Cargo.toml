@@ -2,6 +2,11 @@
 name = "localsend-core"
 version = "0.1.0"
 edition = "2021"
+authors = ["Krithic Kumar krithickumarub@protonmail.com"]
+license = "GPL-3.0"
+keywords = ["filesharing"]
+description = "Library implementing the localsend protocol"
+repository = "https://github.com/notjedi/localsend-rs"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
