@@ -12,3 +12,6 @@ a cli for localsend
 6. https://gist.github.com/hostilefork/f7cae3dc33e7416f2dd25a402857b6c6
 7. https://blog.abby.md/_generated/hexo_multicasting-in-rust.htm
 8. https://github.com/PacktPublishing/Network-Programming-with-Rust/blob/master/Chapter03/udp-multicast.rs
+9. https://github.com/joelparkerhenderson/demo-rust-axum
+10. https://github.com/tokio-rs/axum/tree/main/examples/low-level-rustls[](https://github.com/programatik29/axum-server/blob/master/examples/http_and_https.rs)
+11. https://github.com/tokio-rs/axum/blob/main/examples/stream-to-file/src/main.rs

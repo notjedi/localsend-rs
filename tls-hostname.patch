@@ -1065,7 +1065,7 @@ index 0000000000000000000000000000000000000000..45767025fcb75a22323a5ce47e8b52c6
 ++rustls = { path = "../rustls", package = "rustls", features = ["dangerous_configuration"], optional = true }
 + rustls-pemfile = { version = "1", optional = true }
 + tokio-rustls = { version = "0.23", optional = true }
-+ 
++
 diff --git a/crates/axum-server/src/accept.rs b/crates/axum-server/src/accept.rs
 new file mode 100644
 index 0000000000000000000000000000000000000000..702337a99bc0d8b03a232aa866e1c108fc9187ac
@@ -3026,7 +3026,7 @@ index 0000000000000000000000000000000000000000..c21a62b817ec3f1e41fe5694c5c04808
 +-tokio-rustls = { version = "0.23", optional = true }
 ++# tokio-rustls = { version = "0.23", optional = true }
 ++tokio-rustls = { path = "../tokio-rustls", package = "tokio-rustls", optional = true }
-+ 
++
 + [dev-dependencies]
 + axum = "0.6"
 +diff --git a/src/lib.rs b/src/lib.rs
@@ -3036,7 +3036,7 @@ index 0000000000000000000000000000000000000000..c21a62b817ec3f1e41fe5694c5c04808
 +@@ -65,7 +65,7 @@
 + //! [`RustlsConfig`]: crate::tls_rustls::RustlsConfig
 + //! [`SocketAddr`]: std::net::SocketAddr
-+ 
++
 +-#![forbid(unsafe_code)]
 ++// #![forbid(unsafe_code)]
 + #![warn(
@@ -3065,7 +3065,7 @@ index 0000000000000000000000000000000000000000..c21a62b817ec3f1e41fe5694c5c04808
 ++                            let server_config = this.config.take().expect(
 ++                            "config is not set. this is a bug in axum-server, please report",
 ++                        ).get_inner();
-+ 
++
 +-                            let acceptor = TlsAcceptor::from(server_config);
 ++                            let tokio_server_config = unsafe {
 ++                                std::mem::transmute::<
@@ -3077,7 +3077,7 @@ index 0000000000000000000000000000000000000000..c21a62b817ec3f1e41fe5694c5c04808
 ++
 ++                            // let acceptor = TlsAcceptor::from(server_config);
 +                             let future = acceptor.accept(stream);
-+ 
++
 +                             let service = Some(service);
 diff --git a/crates/localsend-core/Cargo.toml b/crates/localsend-core/Cargo.toml
 index 7b961ac9975444cc522d41657e02b0adf8fe3aed..3e807b54768de49e1c6fc4913301253e87ffc8b6 100644
