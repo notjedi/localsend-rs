@@ -45,6 +45,7 @@ pub struct FileInfo {
     pub file_name: String,
     #[serde(rename = "fileType")]
     pub file_type: String, // image | video | pdf | text | other
+                           // pub token: String,
                            // preview_data: type? // nullable
 }
 

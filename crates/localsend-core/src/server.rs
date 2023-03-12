@@ -1,4 +1,4 @@
-use crate::{utils, SendInfo};
+use crate::{utils, Device, FileInfo, SendInfo};
 use axum::{
     body::Bytes,
     extract::{BodyStream, Query},
@@ -8,14 +8,51 @@ use axum::{
 use axum_server::tls_rustls::RustlsConfig;
 use futures::{Stream, TryStreamExt};
 use std::collections::HashMap;
+use std::time::Instant;
 use std::{io, net::SocketAddr};
 use tokio::{fs::File, io::BufWriter};
 use tokio_util::io::StreamReader;
 use tracing::{info, trace};
 use uuid::Uuid;
 
+enum SessionStatus {
+    Waiting,            // wait for receiver response (wait for decline / accept)
+    RecipientBusy,      // recipient is busy with another request (end of session)
+    Declined,           // receiver declined the request (end of session)
+    Sending,            // files are being sent
+    Finished,           // all files sent (end of session)
+    FinishedWithErrors, // finished but some files could not be sent (end of session)
+    CanceledBySender,   // cancellation by sender  (end of session)
+    CanceledByReceiver, // cancellation by receiver (end of session)
+}
+
+pub struct ReceiveSession {
+    sender: Device,
+    files: HashMap<String, FileInfo>,
+    destination_directory: String,
+    start_time: Instant,
+    status: SessionStatus,
+}
+
+impl ReceiveSession {
+    fn new(
+        sender: Device,
+        files: HashMap<String, FileInfo>,
+        destination_directory: String,
+    ) -> Self {
+        Self {
+            sender,
+            files,
+            destination_directory,
+            start_time: Instant::now(),
+            status: SessionStatus::Sending,
+        }
+    }
+}
+
 pub struct Server {
     certificate: rcgen::Certificate,
+    receive_session: Option<ReceiveSession>,
 }
 
 impl Default for Server {
@@ -28,6 +65,7 @@ impl Server {
     pub fn new() -> Self {
         Self {
             certificate: utils::generate_tls_cert(),
+            receive_session: None,
         }
     }
 
@@ -74,7 +112,7 @@ impl Server {
 async fn stream_to_file<S, E>(path: &str, stream: S)
 where
     S: Stream<Item = Result<Bytes, E>>,
-    E: Into<BoxError>,
+    E: Into<BoxError>, // BoxError is just - Box<dyn std::error::Error + Send + Sync>
 {
     // Convert the stream into an `AsyncRead`.
     let body_with_io_error = stream.map_err(|err| io::Error::new(io::ErrorKind::Other, err));
@@ -84,7 +122,6 @@ where
     // Create the file. `File` implements `AsyncWrite`.
     let path = std::path::Path::new(path);
     let mut file = BufWriter::new(File::create(path).await.unwrap());
-    // let mut file = BufWriter::new(tokio::io::stdout());
 
     // Copy the body into the file.
     tokio::io::copy(&mut body_reader, &mut file).await.unwrap();
