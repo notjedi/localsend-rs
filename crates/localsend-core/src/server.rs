@@ -1,13 +1,14 @@
-use crate::{utils, Device, FileInfo, SendInfo};
+use crate::{utils, DeviceResponse, FileInfo, SendInfo};
 use axum::{
     body::Bytes,
-    extract::{BodyStream, Query},
+    extract::{BodyStream, Query, State},
     routing::post,
     BoxError, Json, Router,
 };
 use axum_server::tls_rustls::RustlsConfig;
 use futures::{Stream, TryStreamExt};
 use std::collections::HashMap;
+use std::sync::Arc;
 use std::time::Instant;
 use std::{io, net::SocketAddr};
 use tokio::{fs::File, io::BufWriter};
@@ -15,6 +16,7 @@ use tokio_util::io::StreamReader;
 use tracing::{info, trace};
 use uuid::Uuid;
 
+#[derive(Clone)]
 enum SessionStatus {
     Waiting,            // wait for receiver response (wait for decline / accept)
     RecipientBusy,      // recipient is busy with another request (end of session)
@@ -26,8 +28,9 @@ enum SessionStatus {
     CanceledByReceiver, // cancellation by receiver (end of session)
 }
 
+#[derive(Clone)]
 pub struct ReceiveSession {
-    sender: Device,
+    sender: DeviceResponse,
     files: HashMap<String, FileInfo>,
     destination_directory: String,
     start_time: Instant,
@@ -36,7 +39,7 @@ pub struct ReceiveSession {
 
 impl ReceiveSession {
     fn new(
-        sender: Device,
+        sender: DeviceResponse,
         files: HashMap<String, FileInfo>,
         destination_directory: String,
     ) -> Self {
@@ -52,7 +55,6 @@ impl ReceiveSession {
 
 pub struct Server {
     certificate: rcgen::Certificate,
-    receive_session: Option<ReceiveSession>,
 }
 
 impl Default for Server {
@@ -65,7 +67,6 @@ impl Server {
     pub fn new() -> Self {
         Self {
             certificate: utils::generate_tls_cert(),
-            receive_session: None,
         }
     }
 
@@ -75,10 +76,12 @@ impl Server {
         let config = RustlsConfig::from_pem(cert_pem.into_bytes(), private_key_pem.into_bytes())
             .await
             .unwrap();
+        let session_state: Arc<Option<ReceiveSession>> = Arc::new(None);
 
         let app = Router::new()
             .route("/api/localsend/v1/send-request", post(Self::send_request))
-            .route("/api/localsend/v1/send", post(Self::incoming_send_post));
+            .route("/api/localsend/v1/send", post(Self::incoming_send_post))
+            .with_state(session_state);
 
         let addr = SocketAddr::from(([0, 0, 0, 0], crate::MULTICAST_PORT));
         info!("listening on {}", addr);
@@ -89,6 +92,7 @@ impl Server {
     }
 
     async fn send_request(
+        State(session_state): State<Arc<Option<ReceiveSession>>>,
         Json(send_request): Json<crate::SendRequest>,
     ) -> Json<HashMap<String, String>> {
         trace!("got request {:#?}", send_request);
@@ -102,7 +106,11 @@ impl Server {
         Json(wanted_files)
     }
 
-    async fn incoming_send_post(params: Query<SendInfo>, file_stream: BodyStream) {
+    async fn incoming_send_post(
+        params: Query<SendInfo>,
+        State(session_state): State<Arc<Option<ReceiveSession>>>,
+        file_stream: BodyStream,
+    ) {
         trace!("{:?}", &params);
         stream_to_file("hi", file_stream).await;
     }

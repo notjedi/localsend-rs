@@ -4,7 +4,10 @@ use std::time::Duration;
 use tracing::{debug, trace};
 use uuid::Uuid;
 
-use crate::{protos::Device, utils::get_device_ip_addr};
+use crate::{
+    protos::{DeviceInfo, DeviceResponse},
+    utils::get_device_ip_addr,
+};
 use crate::{
     ALIAS, BUFFER_SIZE, DEVICE_MODEL, DEVICE_TYPE, INTERFACE_ADDR, MULTICAST_ADDR, MULTICAST_PORT,
     NUM_REPEAT, READ_TIMEOUT,
@@ -12,8 +15,8 @@ use crate::{
 
 pub struct DeviceScanner {
     socket: UdpSocket,
-    this_device: Device,
-    devices: Vec<Device>,
+    this_device: DeviceResponse,
+    devices: Vec<DeviceInfo>,
 }
 
 impl Default for DeviceScanner {
@@ -33,15 +36,17 @@ impl DeviceScanner {
 
         let ip_addr = get_device_ip_addr().unwrap_or(IpAddr::V4([0, 0, 0, 0].into()));
 
-        let this_device = Device {
+        let device_info = DeviceInfo {
             alias: ALIAS.to_string(),
-            announcement: true,
-            fingerprint: fingerprint.to_string(),
             device_type: DEVICE_TYPE.to_string(),
             device_model: Some(DEVICE_MODEL.to_string()),
             ip: ip_addr.to_string(),
-            // TODO: change this to user's config port later on
-            port: 53317,
+            port: MULTICAST_PORT,
+        };
+        let this_device = DeviceResponse {
+            device_info,
+            announcement: true,
+            fingerprint: fingerprint.to_string(),
         };
 
         Self {
@@ -61,31 +66,25 @@ impl DeviceScanner {
         loop {
             match self.socket.recv_from(&mut buf) {
                 Ok((amt, src)) => {
-                    let mut device: Device = serde_json::from_slice(&buf[..amt]).unwrap();
-                    (device.ip, device.port) = (src.ip().to_string(), src.port());
+                    let mut device_response: DeviceResponse =
+                        serde_json::from_slice(&buf[..amt]).unwrap();
+                    (
+                        device_response.device_info.ip,
+                        device_response.device_info.port,
+                    ) = (src.ip().to_string(), src.port());
 
-                    // NOTE: self.this_device.ip may be 0.0.0.0 if the program fails to find
-                    // a network interface or the machine might have multiple non-loopback
-                    // interfaces and the IP we received might be different than what we have
-                    if device == self.this_device {
+                    if device_response == self.this_device {
                         continue;
                     }
 
-                    if device.announcement {
+                    if device_response.announcement {
                         self.announce_multicast(false);
                     }
 
-                    match self.devices.iter().position(|dev| *dev.ip == device.ip) {
-                        Some(index) => {
-                            // update existing device
-                            self.devices[index] = device;
-                        }
-                        None => {
-                            // New device
-                            self.devices.push(device);
-                            debug!("{:#?}", &self.devices);
-                            debug!("{:#?}", &self.devices.len());
-                        }
+                    if !self.devices.contains(&device_response.device_info) {
+                        self.devices.push(device_response.device_info);
+                        debug!("{:#?}", &self.devices);
+                        debug!("{:#?}", &self.devices.len());
                     }
                 }
                 Err(_) => {

@@ -3,11 +3,34 @@ use std::collections::HashMap;
 
 // TODO: use snake_case serde rename trick
 // TODO: change all String to &str type
-#[derive(Debug, Serialize, Deserialize)]
-pub struct Device {
-    pub alias: String,
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DeviceResponse {
+    #[serde(flatten)]
+    pub device_info: DeviceInfo,
     pub announcement: bool,
     pub fingerprint: String,
+}
+
+impl From<DeviceInfo> for DeviceResponse {
+    fn from(device: DeviceInfo) -> Self {
+        Self {
+            device_info: device,
+            fingerprint: "".into(),
+            announcement: false,
+        }
+    }
+}
+
+impl PartialEq for DeviceResponse {
+    // https://www.reddit.com/r/rust/comments/t8d6wb/comment/hznabrt
+    fn eq(&self, other: &Self) -> bool {
+        self.fingerprint == other.fingerprint
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DeviceInfo {
+    pub alias: String,
     #[serde(rename = "deviceType")]
     pub device_type: String,
     #[serde(rename = "deviceModel")]
@@ -18,26 +41,13 @@ pub struct Device {
     pub port: u16,
 }
 
-impl PartialEq for Device {
-    // https://www.reddit.com/r/rust/comments/t8d6wb/comment/hznabrt
+impl PartialEq for DeviceInfo {
     fn eq(&self, other: &Self) -> bool {
-        // TODO: decide on the best comparision method
-        // self.ip == other.ip
-        // self.fingerprint == other.fingerprint
-        self.fingerprint == other.fingerprint && self.ip == other.ip
+        self.ip == other.ip
     }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
-pub struct LegacyResponse {
-    alias: String,
-    #[serde(rename = "deviceType")]
-    device_type: String,
-    #[serde(rename = "deviceModel")]
-    device_model: Option<String>,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FileInfo {
     pub id: String,
     pub size: usize, // bytes
@@ -51,7 +61,7 @@ pub struct FileInfo {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct SendRequest {
-    info: LegacyResponse,
+    pub device_info: DeviceInfo,
     pub files: HashMap<String, FileInfo>,
 }
 
