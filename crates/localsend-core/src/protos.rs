@@ -47,6 +47,19 @@ impl PartialEq for DeviceInfo {
     }
 }
 
+// TODO: fix this later
+impl DeviceInfo {
+    pub fn new() -> Self {
+        Self {
+            alias: "".into(),
+            device_type: "".into(),
+            device_model: None,
+            ip: "".into(),
+            port: 0,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FileInfo {
     pub id: String,
@@ -61,6 +74,7 @@ pub struct FileInfo {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct SendRequest {
+    #[serde(rename = "info")]
     pub device_info: DeviceInfo,
     pub files: HashMap<String, FileInfo>,
 }

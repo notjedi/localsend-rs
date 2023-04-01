@@ -26,8 +26,8 @@ impl log::Log for MyLogger {
 
 #[tokio::main]
 async fn main() {
-    init_logger(log::LevelFilter::Debug);
-    init_tracing_logger(LevelFilter::DEBUG);
+    init_logger(log::LevelFilter::Info);
+    init_tracing_logger(LevelFilter::INFO);
 
     // spawn task to listen and announce multicast messages
     start_device_scanner();

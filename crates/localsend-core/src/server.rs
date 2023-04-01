@@ -1,4 +1,4 @@
-use crate::{utils, DeviceResponse, FileInfo, SendInfo};
+use crate::{utils, DeviceInfo, FileInfo, SendInfo};
 use axum::{
     body::Bytes,
     extract::{BodyStream, Query, State},
@@ -8,7 +8,7 @@ use axum::{
 use axum_server::tls_rustls::RustlsConfig;
 use futures::{Stream, TryStreamExt};
 use std::collections::HashMap;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::time::Instant;
 use std::{io, net::SocketAddr};
 use tokio::{fs::File, io::BufWriter};
@@ -16,39 +16,37 @@ use tokio_util::io::StreamReader;
 use tracing::{info, trace};
 use uuid::Uuid;
 
-#[derive(Clone)]
-enum SessionStatus {
-    Waiting,            // wait for receiver response (wait for decline / accept)
-    RecipientBusy,      // recipient is busy with another request (end of session)
-    Declined,           // receiver declined the request (end of session)
-    Sending,            // files are being sent
-    Finished,           // all files sent (end of session)
-    FinishedWithErrors, // finished but some files could not be sent (end of session)
-    CanceledBySender,   // cancellation by sender  (end of session)
-    CanceledByReceiver, // cancellation by receiver (end of session)
+type ReceiveState = Arc<Mutex<ReceiveSession>>;
+
+#[derive(Clone, PartialEq)]
+#[allow(unused)]
+pub enum ReceiveStatus {
+    Idle,               // no ongoing session
+    Waiting,            // wait for sender to send the files
+    Receiving,          // in an ongoing session, receiving files
+    Finished,           // all files received (end of session)
+    FinishedWithErrors, // finished but some files could not be received (end of session)
 }
+// CanceledBySender,   // cancellation by sender  (end of session)
+// CanceledByReceiver, // cancellation by receiver (end of session)
 
 #[derive(Clone)]
 pub struct ReceiveSession {
-    sender: DeviceResponse,
-    files: HashMap<String, FileInfo>,
-    destination_directory: String,
-    start_time: Instant,
-    status: SessionStatus,
+    pub sender: DeviceInfo,
+    pub files: HashMap<String, FileInfo>,
+    pub destination_directory: String,
+    pub start_time: Instant,
+    pub status: ReceiveStatus,
 }
 
 impl ReceiveSession {
-    fn new(
-        sender: DeviceResponse,
-        files: HashMap<String, FileInfo>,
-        destination_directory: String,
-    ) -> Self {
+    fn new(sender: DeviceInfo, destination_directory: String) -> Self {
         Self {
             sender,
-            files,
             destination_directory,
+            files: HashMap::new(),
             start_time: Instant::now(),
-            status: SessionStatus::Sending,
+            status: ReceiveStatus::Idle,
         }
     }
 }
@@ -76,7 +74,10 @@ impl Server {
         let config = RustlsConfig::from_pem(cert_pem.into_bytes(), private_key_pem.into_bytes())
             .await
             .unwrap();
-        let session_state: Arc<Option<ReceiveSession>> = Arc::new(None);
+        let session_state: ReceiveState = Arc::new(Mutex::new(ReceiveSession::new(
+            DeviceInfo::new(),
+            "".into(),
+        )));
 
         let app = Router::new()
             .route("/api/localsend/v1/send-request", post(Self::send_request))
@@ -92,23 +93,39 @@ impl Server {
     }
 
     async fn send_request(
-        State(session_state): State<Arc<Option<ReceiveSession>>>,
+        State(session_state): State<ReceiveState>,
         Json(send_request): Json<crate::SendRequest>,
     ) -> Json<HashMap<String, String>> {
         trace!("got request {:#?}", send_request);
 
         let mut wanted_files: HashMap<String, String> = HashMap::new();
-        send_request.files.into_iter().for_each(|(file_id, _)| {
-            let token = Uuid::new_v4();
-            wanted_files.insert(file_id, token.to_string());
-        });
+        let mut state = session_state.lock().unwrap();
+
+        if state.status != ReceiveStatus::Idle {
+            // reject incoming request by seding empty response as another session is ongoing.
+            return Json(wanted_files);
+        } else {
+            state.sender = send_request.device_info;
+            state.status = ReceiveStatus::Waiting;
+            state.destination_directory = "/home/jedi".into();
+        }
+
+        send_request
+            .files
+            .into_iter()
+            .for_each(|(file_id, file_info)| {
+                let token = Uuid::new_v4();
+                wanted_files.insert(file_id.clone(), token.to_string());
+                state.files.insert(file_id, file_info);
+            });
         trace!("{:#?}", wanted_files);
+        dbg!(&state.files);
         Json(wanted_files)
     }
 
     async fn incoming_send_post(
         params: Query<SendInfo>,
-        State(session_state): State<Arc<Option<ReceiveSession>>>,
+        State(session_state): State<ReceiveState>,
         file_stream: BodyStream,
     ) {
         trace!("{:?}", &params);
