@@ -3,7 +3,7 @@ use std::collections::HashMap;
 
 // TODO: use snake_case serde rename trick
 // TODO: change all String to &str type
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct DeviceResponse {
     #[serde(flatten)]
     pub device_info: DeviceInfo,
@@ -28,12 +28,11 @@ impl PartialEq for DeviceResponse {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct DeviceInfo {
     pub alias: String,
-    #[serde(rename = "deviceType")]
     pub device_type: String,
-    #[serde(rename = "deviceModel")]
     pub device_model: Option<String>,
     #[serde(skip)]
     pub ip: String,
@@ -60,16 +59,25 @@ impl DeviceInfo {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum FileType {
+    Image,
+    Video,
+    Pdf,
+    Text,
+    Other,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct FileInfo {
     pub id: String,
     pub size: usize, // bytes
-    #[serde(rename = "fileName")]
     pub file_name: String,
-    #[serde(rename = "fileType")]
-    pub file_type: String, // image | video | pdf | text | other
-                           // pub token: String,
-                           // preview_data: type? // nullable
+    pub file_type: FileType,
+    // pub token: String,
+    // preview_data: type? // nullable
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -80,8 +88,8 @@ pub struct SendRequest {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct SendInfo {
-    #[serde(rename = "fileId")]
     pub file_id: String,
     pub token: String,
 }

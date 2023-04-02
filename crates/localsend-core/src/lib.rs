@@ -15,7 +15,7 @@ pub const MULTICAST_PORT: u16 = 53317;
 const BUFFER_SIZE: u16 = 4096;
 const READ_TIMEOUT: u64 = 5;
 
-pub const NUM_REPEAT: u8 = 4;
+pub const NUM_REPEAT: u8 = 2;
 
 const ALIAS: &str = "rustsend";
 const DEVICE_MODEL: &str = "linux";
