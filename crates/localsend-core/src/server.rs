@@ -2,6 +2,7 @@ use crate::{utils, DeviceInfo, FileInfo, SendInfo};
 use axum::{
     body::Bytes,
     extract::{BodyStream, Query, State},
+    http::StatusCode,
     routing::post,
     BoxError, Json, Router,
 };
@@ -95,15 +96,15 @@ impl Server {
     async fn send_request(
         State(session_state): State<ReceiveState>,
         Json(send_request): Json<crate::SendRequest>,
-    ) -> Json<HashMap<String, String>> {
+    ) -> Result<Json<HashMap<String, String>>, (StatusCode, String)> {
         trace!("got request {:#?}", send_request);
 
         let mut wanted_files: HashMap<String, String> = HashMap::new();
         let mut state = session_state.lock().unwrap();
 
         if state.status != ReceiveStatus::Idle {
-            // reject incoming request by seding empty response as another session is ongoing.
-            return Json(wanted_files);
+            // reject incoming request if another session is ongoing
+            return Err((StatusCode::CONFLICT, "Blocked by another sesssion".into()));
         } else {
             state.sender = send_request.device_info;
             state.status = ReceiveStatus::Waiting;
@@ -120,16 +121,23 @@ impl Server {
             });
         trace!("{:#?}", wanted_files);
         dbg!(&state.files);
-        Json(wanted_files)
+        Ok(Json(wanted_files))
     }
 
     async fn incoming_send_post(
-        params: Query<SendInfo>,
         State(session_state): State<ReceiveState>,
+        params: Query<SendInfo>,
         file_stream: BodyStream,
     ) {
         trace!("{:?}", &params);
-        stream_to_file("hi", file_stream).await;
+
+        // https://users.rust-lang.org/t/strange-compiler-error-bug-axum-handler/71352/3
+        let file_name = {
+            let state = session_state.lock().unwrap();
+            state.files[&params.file_id].file_name.clone()
+        };
+        dbg!(&file_name);
+        stream_to_file(file_name.as_str(), file_stream).await;
     }
 }
 
