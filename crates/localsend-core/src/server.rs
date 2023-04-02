@@ -76,7 +76,7 @@ impl Server {
             .await
             .unwrap();
         let session_state: ReceiveState = Arc::new(Mutex::new(ReceiveSession::new(
-            DeviceInfo::new(),
+            DeviceInfo::default(),
             "".into(),
         )));
 

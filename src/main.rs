@@ -25,10 +25,7 @@ fn start_device_scanner() {
 }
 
 fn init_tracing_logger() {
-    // TODO: use env filter
-
     let subscriber = FmtSubscriber::builder()
-        // .with_env_filter(EnvFilter::from_default_env())
         .with_env_filter(
             EnvFilter::builder()
                 .with_default_directive(LevelFilter::INFO.into())

@@ -1,7 +1,6 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
-// TODO: use snake_case serde rename trick
 // TODO: change all String to &str type
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct DeviceResponse {
@@ -46,9 +45,8 @@ impl PartialEq for DeviceInfo {
     }
 }
 
-// TODO: fix this later
-impl DeviceInfo {
-    pub fn new() -> Self {
+impl Default for DeviceInfo {
+    fn default() -> Self {
         Self {
             alias: "".into(),
             device_type: "".into(),
@@ -76,7 +74,7 @@ pub struct FileInfo {
     pub size: usize, // bytes
     pub file_name: String,
     pub file_type: FileType,
-    // pub token: String,
+    // pub token: String,   // TODO: use this to verify while receiving the file
     // preview_data: type? // nullable
 }
 
