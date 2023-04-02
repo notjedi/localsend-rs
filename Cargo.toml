@@ -13,12 +13,10 @@ repository = "https://github.com/notjedi/localsend-rs"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-localsend-core = { path = "crates/localsend-core", package = "localsend-core" }
-tokio = { version = "1.26.0", features = ["full"] }
-log = "0.4.17"
 tracing = "0.1.37"
-tracing-subscriber = { version = "0.3.16", features = ["env-filter", "time"] }
-time = { version = "0.3.20", features = ["formatting"] }
+tokio = { version = "1.27.0", features = ["rt-multi-thread"] }
+tracing-subscriber = { version = "0.3.16", features = ["env-filter"] }
+localsend-core = { path = "crates/localsend-core", package = "localsend-core" }
 
 [workspace]
 members = ["crates/localsend-core", "crates/axum-server", "crates/rustls"]
