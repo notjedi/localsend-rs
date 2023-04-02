@@ -20,16 +20,14 @@ use uuid::Uuid;
 type ReceiveState = Arc<Mutex<ReceiveSession>>;
 
 #[derive(Clone, PartialEq, Debug)]
-#[allow(unused)]
 pub enum ReceiveStatus {
+    // TODO: add status for cancelled
     Idle,               // no ongoing session
     Waiting,            // wait for sender to send the files
     Receiving,          // in an ongoing session, receiving files
     Finished,           // all files received (end of session)
     FinishedWithErrors, // finished but some files could not be received (end of session)
 }
-// CanceledBySender,   // cancellation by sender  (end of session)
-// CanceledByReceiver, // cancellation by receiver (end of session)
 
 #[derive(Clone)]
 pub struct ReceiveSession {
@@ -104,7 +102,7 @@ impl Server {
         let mut wanted_files: HashMap<String, String> = HashMap::new();
         let mut state = session_state.lock().unwrap();
 
-        dbg!(&state.status);
+        trace!("{:#?}", &state.status);
         if state.status != ReceiveStatus::Idle
             && state.status != ReceiveStatus::Finished
             && state.status != ReceiveStatus::FinishedWithErrors
@@ -127,11 +125,10 @@ impl Server {
                 state.file_status.insert(file_id, ReceiveStatus::Waiting);
             });
         trace!("{:#?}", wanted_files);
-        dbg!(&state.files);
+        trace!("{:#?}, ", &state.files);
         Ok(Json(wanted_files))
     }
 
-    // #[axum_macros::debug_handler]
     async fn incoming_send_post(
         State(session_state): State<ReceiveState>,
         params: Query<SendInfo>,
@@ -140,6 +137,7 @@ impl Server {
         trace!("{:?}", &params);
 
         // https://users.rust-lang.org/t/strange-compiler-error-bug-axum-handler/71352/3
+        // https://github.com/tokio-rs/axum/discussions/641
         let (file_id, file_info) = {
             let mut state = session_state.lock().unwrap();
             state.status = ReceiveStatus::Receiving;
@@ -158,7 +156,6 @@ impl Server {
                 state.file_status[file_status_id] == ReceiveStatus::Finished
                     || state.file_status[file_status_id] == ReceiveStatus::FinishedWithErrors
             });
-            dbg!(all_finished);
             if all_finished {
                 state.status = ReceiveStatus::Finished;
                 state.files.drain();

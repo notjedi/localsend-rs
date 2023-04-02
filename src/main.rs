@@ -1,33 +1,9 @@
 use localsend_core::{DeviceScanner, Server};
-use log::{Metadata, Record};
-use tracing::level_filters::LevelFilter;
-use tracing_subscriber::FmtSubscriber;
-
-struct MyLogger;
-
-impl log::Log for MyLogger {
-    fn enabled(&self, _metadata: &Metadata) -> bool {
-        false
-    }
-
-    fn log(&self, record: &Record) {
-        if self.enabled(record.metadata()) {
-            println!(
-                "{:?}:{:?} - {} - {}",
-                record.file(),
-                record.line(),
-                record.level(),
-                record.args()
-            );
-        }
-    }
-    fn flush(&self) {}
-}
+use tracing_subscriber::{fmt::time::UtcTime, EnvFilter, FmtSubscriber};
 
 #[tokio::main]
 async fn main() {
-    init_logger(log::LevelFilter::Info);
-    init_tracing_logger(LevelFilter::INFO);
+    init_tracing_logger();
 
     // spawn task to listen and announce multicast messages
     start_device_scanner();
@@ -47,15 +23,16 @@ fn start_device_scanner() {
     // std::thread::sleep(std::time::Duration::from_secs(5));
 }
 
-fn init_tracing_logger(level: LevelFilter) {
+fn init_tracing_logger() {
     // TODO: use env filter
-    // let subscriber = FmtSubscriber::new();
-    let subscriber = FmtSubscriber::builder().with_max_level(level).finish();
-    tracing::subscriber::set_global_default(subscriber).expect("setting default subscriber failed");
-}
+    let time_format = time::format_description::parse("[hour]:[minute]:[second]")
+        .expect("format string should be valid!");
+    let timer = UtcTime::new(time_format);
 
-fn init_logger(level: log::LevelFilter) {
-    static MY_LOGGER: MyLogger = MyLogger;
-    log::set_logger(&MY_LOGGER).unwrap();
-    log::set_max_level(level);
+    let subscriber = FmtSubscriber::builder()
+        .with_env_filter(EnvFilter::from_default_env())
+        .with_line_number(true)
+        .with_timer(timer)
+        .finish();
+    tracing::subscriber::set_global_default(subscriber).expect("setting default subscriber failed");
 }
