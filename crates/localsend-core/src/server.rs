@@ -19,7 +19,7 @@ use uuid::Uuid;
 
 type ReceiveState = Arc<Mutex<ReceiveSession>>;
 
-#[derive(Clone, PartialEq)]
+#[derive(Clone, PartialEq, Debug)]
 #[allow(unused)]
 pub enum ReceiveStatus {
     Idle,               // no ongoing session
@@ -35,6 +35,7 @@ pub enum ReceiveStatus {
 pub struct ReceiveSession {
     pub sender: DeviceInfo,
     pub files: HashMap<String, FileInfo>,
+    pub file_status: HashMap<String, ReceiveStatus>,
     pub destination_directory: String,
     pub start_time: Instant,
     pub status: ReceiveStatus,
@@ -46,6 +47,7 @@ impl ReceiveSession {
             sender,
             destination_directory,
             files: HashMap::new(),
+            file_status: HashMap::new(),
             start_time: Instant::now(),
             status: ReceiveStatus::Idle,
         }
@@ -102,7 +104,11 @@ impl Server {
         let mut wanted_files: HashMap<String, String> = HashMap::new();
         let mut state = session_state.lock().unwrap();
 
-        if state.status != ReceiveStatus::Idle {
+        dbg!(&state.status);
+        if state.status != ReceiveStatus::Idle
+            && state.status != ReceiveStatus::Finished
+            && state.status != ReceiveStatus::FinishedWithErrors
+        {
             // reject incoming request if another session is ongoing
             return Err((StatusCode::CONFLICT, "Blocked by another sesssion".into()));
         } else {
@@ -117,13 +123,15 @@ impl Server {
             .for_each(|(file_id, file_info)| {
                 let token = Uuid::new_v4();
                 wanted_files.insert(file_id.clone(), token.to_string());
-                state.files.insert(file_id, file_info);
+                state.files.insert(file_id.clone(), file_info);
+                state.file_status.insert(file_id, ReceiveStatus::Waiting);
             });
         trace!("{:#?}", wanted_files);
         dbg!(&state.files);
         Ok(Json(wanted_files))
     }
 
+    // #[axum_macros::debug_handler]
     async fn incoming_send_post(
         State(session_state): State<ReceiveState>,
         params: Query<SendInfo>,
@@ -132,12 +140,33 @@ impl Server {
         trace!("{:?}", &params);
 
         // https://users.rust-lang.org/t/strange-compiler-error-bug-axum-handler/71352/3
-        let file_name = {
-            let state = session_state.lock().unwrap();
-            state.files[&params.file_id].file_name.clone()
+        let (file_id, file_info) = {
+            let mut state = session_state.lock().unwrap();
+            state.status = ReceiveStatus::Receiving;
+            (params.file_id.clone(), state.files[&params.file_id].clone())
         };
-        dbg!(&file_name);
-        stream_to_file(file_name.as_str(), file_stream).await;
+        // TODO: catch erros in this method
+        stream_to_file(file_info.file_name.as_str(), file_stream).await;
+        {
+            let mut state = session_state.lock().unwrap();
+            // state.file_status[&file_id] = ReceiveStatus::Finished;
+            state
+                .file_status
+                .entry(file_id)
+                .and_modify(|file_status| *file_status = ReceiveStatus::Finished);
+            let all_finished = state.files.iter().all(|(file_status_id, _)| {
+                state.file_status[file_status_id] == ReceiveStatus::Finished
+                    || state.file_status[file_status_id] == ReceiveStatus::FinishedWithErrors
+            });
+            dbg!(all_finished);
+            if all_finished {
+                state.status = ReceiveStatus::Finished;
+                state.files.drain();
+                state.file_status.drain();
+            } else {
+                state.status = ReceiveStatus::Receiving;
+            }
+        }
     }
 }
 
