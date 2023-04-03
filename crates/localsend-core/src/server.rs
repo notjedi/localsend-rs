@@ -17,13 +17,12 @@ use tokio_util::io::StreamReader;
 use tracing::{info, trace};
 use uuid::Uuid;
 
-type ReceiveState = Arc<Mutex<ReceiveSession>>;
+type ReceiveState = Arc<Mutex<Option<ReceiveSession>>>;
 
 #[derive(Clone, PartialEq, Debug)]
 pub enum ReceiveStatus {
     // TODO: add status for cancelled
-    Idle,               // no ongoing session
-    Waiting,            // wait for sender to send the files
+    Waiting,            // waiting for sender to send the files
     Receiving,          // in an ongoing session, receiving files
     Finished,           // all files received (end of session)
     FinishedWithErrors, // finished but some files could not be received (end of session)
@@ -47,7 +46,7 @@ impl ReceiveSession {
             files: HashMap::new(),
             file_status: HashMap::new(),
             start_time: Instant::now(),
-            status: ReceiveStatus::Idle,
+            status: ReceiveStatus::Waiting,
         }
     }
 }
@@ -75,10 +74,7 @@ impl Server {
         let config = RustlsConfig::from_pem(cert_pem.into_bytes(), private_key_pem.into_bytes())
             .await
             .unwrap();
-        let session_state: ReceiveState = Arc::new(Mutex::new(ReceiveSession::new(
-            DeviceInfo::default(),
-            "".into(),
-        )));
+        let session_state = Arc::new(Mutex::new(None));
 
         let app = Router::new()
             .route("/api/localsend/v1/send-request", post(Self::send_request))
@@ -99,22 +95,19 @@ impl Server {
     ) -> Result<Json<HashMap<String, String>>, (StatusCode, String)> {
         trace!("got request {:#?}", send_request);
 
-        let mut wanted_files: HashMap<String, String> = HashMap::new();
-        let mut state = session_state.lock().unwrap();
-
-        trace!("{:#?}", &state.status);
-        if state.status != ReceiveStatus::Idle
-            && state.status != ReceiveStatus::Finished
-            && state.status != ReceiveStatus::FinishedWithErrors
-        {
+        let mut session = session_state.lock().unwrap();
+        if session.is_some() {
             // reject incoming request if another session is ongoing
             return Err((StatusCode::CONFLICT, "Blocked by another sesssion".into()));
-        } else {
-            state.sender = send_request.device_info;
-            state.status = ReceiveStatus::Waiting;
-            state.destination_directory = "/home/jedi".into();
         }
+        trace!("session_state is None");
 
+        let mut state = session.insert(ReceiveSession::new(DeviceInfo::default(), "".into()));
+        state.sender = send_request.device_info;
+        state.status = ReceiveStatus::Waiting;
+        state.destination_directory = "/home/jedi".into();
+
+        let mut wanted_files: HashMap<String, String> = HashMap::new();
         send_request
             .files
             .into_iter()
@@ -129,25 +122,35 @@ impl Server {
         Ok(Json(wanted_files))
     }
 
+    // #[axum_macros::debug_handler]
     async fn incoming_send_post(
         State(session_state): State<ReceiveState>,
         params: Query<SendInfo>,
         file_stream: BodyStream,
-    ) {
+    ) -> Result<(), (StatusCode, String)> {
         trace!("{:?}", &params);
 
-        // https://users.rust-lang.org/t/strange-compiler-error-bug-axum-handler/71352/3
-        // https://github.com/tokio-rs/axum/discussions/641
         let (file_id, file_info) = {
-            let mut state = session_state.lock().unwrap();
+            // https://users.rust-lang.org/t/strange-compiler-error-bug-axum-handler/71352/3
+            // https://github.com/tokio-rs/axum/discussions/641
+            let mut session = session_state.lock().unwrap();
+            if session.is_none() {
+                return Err((
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "Call to /send without requesting a send".into(),
+                ));
+            }
+            let mut state = session.as_mut().unwrap();
             state.status = ReceiveStatus::Receiving;
             (params.file_id.clone(), state.files[&params.file_id].clone())
         };
+
         // TODO: catch erros in this method
         stream_to_file(file_info.file_name.as_str(), file_stream).await;
-        {
-            let mut state = session_state.lock().unwrap();
-            // state.file_status[&file_id] = ReceiveStatus::Finished;
+
+        let mut session = session_state.lock().unwrap();
+        let all_finished = {
+            let mut state = session.as_mut().unwrap();
             state
                 .file_status
                 .entry(file_id)
@@ -156,14 +159,16 @@ impl Server {
                 state.file_status[file_status_id] == ReceiveStatus::Finished
                     || state.file_status[file_status_id] == ReceiveStatus::FinishedWithErrors
             });
-            if all_finished {
-                state.status = ReceiveStatus::Finished;
-                state.files.drain();
-                state.file_status.drain();
-            } else {
+            if !all_finished {
                 state.status = ReceiveStatus::Receiving;
             }
+            all_finished
+        };
+
+        if all_finished {
+            *session = None;
         }
+        return Ok(());
     }
 }
 
