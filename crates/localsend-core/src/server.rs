@@ -98,14 +98,42 @@ impl Server {
     ) -> Result<Json<HashMap<String, String>>, (StatusCode, String)> {
         trace!("got request {:#?}", send_request);
 
-        let mut session = session_state.lock().unwrap();
-        if session.is_some() {
-            // reject incoming request if another session is ongoing
-            return Err((StatusCode::CONFLICT, "Blocked by another sesssion".into()));
+        {
+            let session = session_state.lock().unwrap();
+            if session.is_some() {
+                // reject incoming request if another session is ongoing
+                return Err((StatusCode::CONFLICT, "Blocked by another sesssion".into()));
+            }
+            trace!("session_state is None");
         }
-        trace!("session_state is None");
+
+        use tokio::io::{AsyncBufReadExt, AsyncWriteExt};
+        let mut stdout = tokio::io::stdout();
+        let _ = stdout
+            .write_all(
+                format!(
+                    "Do you want to accept the send request from {} [y/n]? ",
+                    send_request.device_info.alias
+                )
+                .as_bytes(),
+            )
+            .await;
+        let _ = stdout.flush().await;
+
+        let mut buf = Vec::new();
+        let mut reader = tokio::io::BufReader::new(tokio::io::stdin());
+        let _ = reader.read_until(b'\n', &mut buf).await;
+        let input = std::str::from_utf8(&buf).unwrap();
+        let input = input.trim();
+
+        // TODO: this should be handled from the binary crate. how can i do that?
+        // mpsc channel?
+        if input != "y" && input != "Y" {
+            return Err((StatusCode::FORBIDDEN, "User declined the request".into()));
+        }
 
         // TODO: create destination_directory if it doesn't exist
+        let mut session = session_state.lock().unwrap();
         let state = session.insert(ReceiveSession::new(
             send_request.device_info,
             "./test_files/".into(),
