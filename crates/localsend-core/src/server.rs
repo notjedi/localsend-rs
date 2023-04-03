@@ -105,6 +105,7 @@ impl Server {
         }
         trace!("session_state is None");
 
+        // TODO: create destination_directory if it doesn't exist
         let state = session.insert(ReceiveSession::new(
             send_request.device_info,
             "./test_files/".into(),
@@ -125,7 +126,6 @@ impl Server {
         Ok(Json(wanted_files))
     }
 
-    // #[axum_macros::debug_handler]
     async fn incoming_send_post(
         State(session_state): State<ReceiveState>,
         params: Query<SendInfo>,
@@ -153,23 +153,26 @@ impl Server {
             )
         };
 
-        // TODO: catch erros in this method
         let path = Path::new(&dest_dir).join(&file_info.file_name);
-        stream_to_file(path, file_stream).await;
+        let result = stream_to_file(path, file_stream).await;
 
         let mut session = session_state.lock().unwrap();
         let all_finished = {
             let mut state = session.as_mut().unwrap();
-            state
-                .file_status
-                .entry(file_id)
-                .and_modify(|file_status| *file_status = ReceiveStatus::Finished);
+            state.file_status.entry(file_id).and_modify(|file_status| {
+                *file_status = if result.is_ok() {
+                    ReceiveStatus::Finished
+                } else {
+                    ReceiveStatus::FinishedWithErrors
+                }
+            });
             let all_finished = state.files.iter().all(|(file_status_id, _)| {
                 state.file_status[file_status_id] == ReceiveStatus::Finished
                     || state.file_status[file_status_id] == ReceiveStatus::FinishedWithErrors
             });
-            if !all_finished {
-                state.status = ReceiveStatus::Receiving;
+            if all_finished {
+                // TODO: add support for FinishedWithErrors
+                state.status = ReceiveStatus::Finished;
             }
             all_finished
         };
@@ -182,7 +185,7 @@ impl Server {
 }
 
 // from: https://github.com/tokio-rs/axum/blob/main/examples/stream-to-file/src/main.rs
-async fn stream_to_file<S, E>(path: PathBuf, stream: S)
+async fn stream_to_file<S, E>(path: PathBuf, stream: S) -> std::io::Result<()>
 where
     S: Stream<Item = Result<Bytes, E>>,
     E: Into<BoxError>, // BoxError is just - Box<dyn std::error::Error + Send + Sync>
@@ -193,8 +196,9 @@ where
     futures::pin_mut!(body_reader);
 
     // Create the file. `File` implements `AsyncWrite`.
-    let mut file = BufWriter::new(File::create(path).await.unwrap());
+    let mut file = BufWriter::new(File::create(path).await?);
 
     // Copy the body into the file.
-    tokio::io::copy(&mut body_reader, &mut file).await.unwrap();
+    tokio::io::copy(&mut body_reader, &mut file).await?;
+    Ok(())
 }
