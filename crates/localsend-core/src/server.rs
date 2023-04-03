@@ -8,10 +8,13 @@ use axum::{
 };
 use axum_server::tls_rustls::RustlsConfig;
 use futures::{Stream, TryStreamExt};
-use std::collections::HashMap;
-use std::sync::{Arc, Mutex};
 use std::time::Instant;
+use std::{collections::HashMap, path::Path};
 use std::{io, net::SocketAddr};
+use std::{
+    path::PathBuf,
+    sync::{Arc, Mutex},
+};
 use tokio::{fs::File, io::BufWriter};
 use tokio_util::io::StreamReader;
 use tracing::{info, trace};
@@ -102,10 +105,10 @@ impl Server {
         }
         trace!("session_state is None");
 
-        let mut state = session.insert(ReceiveSession::new(DeviceInfo::default(), "".into()));
-        state.sender = send_request.device_info;
-        state.status = ReceiveStatus::Waiting;
-        state.destination_directory = "/home/jedi".into();
+        let state = session.insert(ReceiveSession::new(
+            send_request.device_info,
+            "./test_files/".into(),
+        ));
 
         let mut wanted_files: HashMap<String, String> = HashMap::new();
         send_request
@@ -130,7 +133,7 @@ impl Server {
     ) -> Result<(), (StatusCode, String)> {
         trace!("{:?}", &params);
 
-        let (file_id, file_info) = {
+        let (dest_dir, file_id, file_info) = {
             // https://users.rust-lang.org/t/strange-compiler-error-bug-axum-handler/71352/3
             // https://github.com/tokio-rs/axum/discussions/641
             let mut session = session_state.lock().unwrap();
@@ -142,11 +145,17 @@ impl Server {
             }
             let mut state = session.as_mut().unwrap();
             state.status = ReceiveStatus::Receiving;
-            (params.file_id.clone(), state.files[&params.file_id].clone())
+            (
+                // TODO: don't use clones
+                state.destination_directory.clone(),
+                params.file_id.clone(),
+                state.files[&params.file_id].clone(),
+            )
         };
 
         // TODO: catch erros in this method
-        stream_to_file(file_info.file_name.as_str(), file_stream).await;
+        let path = Path::new(&dest_dir).join(&file_info.file_name);
+        stream_to_file(path, file_stream).await;
 
         let mut session = session_state.lock().unwrap();
         let all_finished = {
@@ -173,7 +182,7 @@ impl Server {
 }
 
 // from: https://github.com/tokio-rs/axum/blob/main/examples/stream-to-file/src/main.rs
-async fn stream_to_file<S, E>(path: &str, stream: S)
+async fn stream_to_file<S, E>(path: PathBuf, stream: S)
 where
     S: Stream<Item = Result<Bytes, E>>,
     E: Into<BoxError>, // BoxError is just - Box<dyn std::error::Error + Send + Sync>
@@ -184,7 +193,6 @@ where
     futures::pin_mut!(body_reader);
 
     // Create the file. `File` implements `AsyncWrite`.
-    let path = std::path::Path::new(path);
     let mut file = BufWriter::new(File::create(path).await.unwrap());
 
     // Copy the body into the file.
