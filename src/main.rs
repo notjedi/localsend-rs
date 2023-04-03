@@ -21,7 +21,6 @@ fn start_device_scanner() {
         server.announce_multicast_repeated();
         server.listen_and_announce_multicast();
     });
-    // std::thread::sleep(std::time::Duration::from_secs(5));
 }
 
 fn init_tracing_logger() {

@@ -13,9 +13,9 @@ repository = "https://github.com/notjedi/localsend-rs"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-tracing = "0.1.37"
-tokio = { version = "1.27.0", features = ["rt-multi-thread"] }
-tracing-subscriber = { version = "0.3.16", features = ["env-filter"] }
+tracing = "0.1"
+tokio = { version = "1.27", features = ["rt-multi-thread"] }
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 localsend-core = { path = "crates/localsend-core", package = "localsend-core" }
 
 [workspace]
