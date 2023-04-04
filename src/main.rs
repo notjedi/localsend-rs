@@ -61,14 +61,14 @@ async fn main() {
             debug!("{:?}", &server_message);
             match server_message {
                 ServerMessage::SendFileRequest => {}
-                ServerMessage::SendRequest => {
+                ServerMessage::SendRequest(send_request) => {
                     use tokio::io::{AsyncBufReadExt, AsyncWriteExt};
                     let mut stdout = tokio::io::stdout();
                     let _ = stdout
                         .write_all(
                             format!(
-                                "Do you want to accept the send request from notjedi [y/n]? ",
-                                // send_request.device_info.alias
+                                "Do you want to accept the send request from {} [y/n]? ",
+                                send_request.device_info.alias
                             )
                             .as_bytes(),
                         )

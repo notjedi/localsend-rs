@@ -1,6 +1,6 @@
 use crate::{
     utils, AppState, ClientMessage, ReceiveSession, ReceiveState, ReceiveStatus, Receiver,
-    SendInfo, Sender, ServerMessage,
+    SendInfo, SendRequest, Sender, ServerMessage,
 };
 use axum::{
     body::Bytes,
@@ -65,7 +65,7 @@ impl Server {
 
     async fn send_request(
         State(session_state): State<ReceiveState>,
-        Json(send_request): Json<crate::SendRequest>,
+        Json(send_request): Json<SendRequest>,
     ) -> Result<Json<HashMap<String, String>>, (StatusCode, String)> {
         trace!("got request {:#?}", send_request);
 
@@ -75,7 +75,9 @@ impl Server {
             return Err((StatusCode::CONFLICT, "Blocked by another sesssion".into()));
         }
 
-        let _ = session.server_tx.send(ServerMessage::SendRequest);
+        let _ = session
+            .server_tx
+            .send(ServerMessage::SendRequest(send_request.clone()));
         if let Some(ClientMessage::Decline) = session.client_rx.recv().await {
             return Err((StatusCode::FORBIDDEN, "User declined the request".into()));
         }

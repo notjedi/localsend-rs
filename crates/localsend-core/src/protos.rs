@@ -38,7 +38,7 @@ pub enum ClientMessage {
 
 #[derive(Clone, Debug)]
 pub enum ServerMessage {
-    SendRequest,
+    SendRequest(SendRequest),
     SendFileRequest,
 }
 
@@ -109,7 +109,7 @@ pub struct FileInfo {
     // preview_data: type? // nullable
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct SendRequest {
     #[serde(rename = "info")]
     pub device_info: DeviceInfo,
