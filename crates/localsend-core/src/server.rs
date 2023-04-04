@@ -110,8 +110,6 @@ impl Server {
         // receiving files one by one, it should be fine. Shouldn't be locking for the whole
         // function if we are going to receive multiple files at the same time.
         let mut session = session_state.lock().await;
-        // https://users.rust-lang.org/t/strange-compiler-error-bug-axum-handler/71352/3
-        // https://github.com/tokio-rs/axum/discussions/641
         if session.receive_session.is_none() {
             return Err((
                 StatusCode::INTERNAL_SERVER_ERROR,
@@ -120,41 +118,33 @@ impl Server {
         }
         let _ = session.server_tx.send(ServerMessage::SendFileRequest);
 
-        let file_id = params.file_id.clone();
-        let (dest_dir, file_info) = {
-            let mut state = session.receive_session.as_mut().unwrap();
-            state.status = ReceiveStatus::Receiving;
-            (
-                // TODO: don't use clones
-                state.destination_directory.clone(),
-                state.files[&params.file_id].clone(),
-            )
-        };
+        let mut receive_session = session.receive_session.as_mut().unwrap();
+        receive_session.status = ReceiveStatus::Receiving;
 
-        let path = Path::new(&dest_dir).join(&file_info.file_name);
+        let file_id = params.file_id.clone();
+        let path = Path::new(&receive_session.destination_directory)
+            .join(&receive_session.files[&params.file_id].file_name);
         let result = stream_to_file(path, file_stream).await;
 
-        let all_finished = {
-            let mut state = session.receive_session.as_mut().unwrap();
-            state.file_status.entry(file_id).and_modify(|file_status| {
+        receive_session
+            .file_status
+            .entry(file_id)
+            .and_modify(|file_status| {
                 *file_status = if result.is_ok() {
                     ReceiveStatus::Finished
                 } else {
                     ReceiveStatus::FinishedWithErrors
                 }
             });
-            let all_finished = state.files.iter().all(|(file_status_id, _)| {
-                state.file_status[file_status_id] == ReceiveStatus::Finished
-                    || state.file_status[file_status_id] == ReceiveStatus::FinishedWithErrors
-            });
-            if all_finished {
-                // TODO: add support for FinishedWithErrors
-                state.status = ReceiveStatus::Finished;
-            }
-            all_finished
-        };
 
+        let all_finished = receive_session.files.iter().all(|(file_status_id, _)| {
+            receive_session.file_status[file_status_id] == ReceiveStatus::Finished
+                || receive_session.file_status[file_status_id] == ReceiveStatus::FinishedWithErrors
+        });
         if all_finished {
+            // TODO: add support for FinishedWithErrors and send message to bin crate before
+            // setting receive_session to None
+            receive_session.status = ReceiveStatus::Finished;
             session.receive_session = None;
         }
         return Ok(());
