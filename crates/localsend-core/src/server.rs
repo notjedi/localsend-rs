@@ -11,11 +11,8 @@ use futures::{Stream, TryStreamExt};
 use std::time::Instant;
 use std::{collections::HashMap, path::Path};
 use std::{io, net::SocketAddr};
-use std::{
-    path::PathBuf,
-    sync::{Arc, Mutex},
-};
-use tokio::{fs::File, io::BufWriter};
+use std::{path::PathBuf, sync::Arc};
+use tokio::{fs::File, io::BufWriter, sync::Mutex};
 use tokio_util::io::StreamReader;
 use tracing::{info, trace};
 use uuid::Uuid;
@@ -98,13 +95,10 @@ impl Server {
     ) -> Result<Json<HashMap<String, String>>, (StatusCode, String)> {
         trace!("got request {:#?}", send_request);
 
-        {
-            let session = session_state.lock().unwrap();
-            if session.is_some() {
-                // reject incoming request if another session is ongoing
-                return Err((StatusCode::CONFLICT, "Blocked by another sesssion".into()));
-            }
-            trace!("session_state is None");
+        let mut session = session_state.lock().await;
+        if session.is_some() {
+            // reject incoming request if another session is ongoing
+            return Err((StatusCode::CONFLICT, "Blocked by another sesssion".into()));
         }
 
         use tokio::io::{AsyncBufReadExt, AsyncWriteExt};
@@ -133,7 +127,6 @@ impl Server {
         }
 
         // TODO: create destination_directory if it doesn't exist
-        let mut session = session_state.lock().unwrap();
         let state = session.insert(ReceiveSession::new(
             send_request.device_info,
             "./test_files/".into(),
@@ -149,7 +142,7 @@ impl Server {
                 state.files.insert(file_id.clone(), file_info);
                 state.file_status.insert(file_id, ReceiveStatus::Waiting);
             });
-        trace!("{:#?}", wanted_files);
+        trace!("{:#?}", &wanted_files);
         trace!("{:#?}, ", &state.files);
         Ok(Json(wanted_files))
     }
@@ -159,24 +152,26 @@ impl Server {
         params: Query<SendInfo>,
         file_stream: BodyStream,
     ) -> Result<(), (StatusCode, String)> {
-        trace!("{:?}", &params);
+        // NOTE: i shouldn't be locking session_state for the whole function but since we are only
+        // receiving files one by one, it should be fine. Shouldn't be locking for the whole
+        // function if we are going to receive multiple files at the same time.
+        let mut session = session_state.lock().await;
+        // https://users.rust-lang.org/t/strange-compiler-error-bug-axum-handler/71352/3
+        // https://github.com/tokio-rs/axum/discussions/641
+        if session.is_none() {
+            return Err((
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Call to /send without requesting a send".into(),
+            ));
+        }
 
-        let (dest_dir, file_id, file_info) = {
-            // https://users.rust-lang.org/t/strange-compiler-error-bug-axum-handler/71352/3
-            // https://github.com/tokio-rs/axum/discussions/641
-            let mut session = session_state.lock().unwrap();
-            if session.is_none() {
-                return Err((
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                    "Call to /send without requesting a send".into(),
-                ));
-            }
+        let file_id = params.file_id.clone();
+        let (dest_dir, file_info) = {
             let mut state = session.as_mut().unwrap();
             state.status = ReceiveStatus::Receiving;
             (
                 // TODO: don't use clones
                 state.destination_directory.clone(),
-                params.file_id.clone(),
                 state.files[&params.file_id].clone(),
             )
         };
@@ -184,7 +179,6 @@ impl Server {
         let path = Path::new(&dest_dir).join(&file_info.file_name);
         let result = stream_to_file(path, file_stream).await;
 
-        let mut session = session_state.lock().unwrap();
         let all_finished = {
             let mut state = session.as_mut().unwrap();
             state.file_status.entry(file_id).and_modify(|file_status| {
