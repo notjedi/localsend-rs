@@ -1,6 +1,15 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::sync::Arc;
 use std::time::Instant;
+use tokio::sync::{
+    mpsc::{UnboundedReceiver, UnboundedSender},
+    Mutex,
+};
+
+pub type ReceiveState = Arc<Mutex<AppState>>;
+pub type Sender = UnboundedSender<ServerMessage>;
+pub type Receiver = UnboundedReceiver<ClientMessage>;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -19,6 +28,18 @@ pub enum ReceiveStatus {
     Receiving,          // in an ongoing session, receiving files
     Finished,           // all files received (end of session)
     FinishedWithErrors, // finished but some files could not be received (end of session)
+}
+
+#[derive(Clone, Debug)]
+pub enum ClientMessage {
+    Allow,
+    Decline,
+}
+
+#[derive(Clone, Debug)]
+pub enum ServerMessage {
+    SendRequest,
+    SendFileRequest,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -123,4 +144,10 @@ impl ReceiveSession {
             status: ReceiveStatus::Waiting,
         }
     }
+}
+
+pub struct AppState {
+    pub(crate) server_tx: Sender,
+    pub(crate) client_rx: Receiver,
+    pub(crate) receive_session: Option<ReceiveSession>,
 }

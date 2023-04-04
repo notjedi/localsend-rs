@@ -1,4 +1,7 @@
-use crate::{utils, ReceiveSession, ReceiveStatus, SendInfo};
+use crate::{
+    utils, AppState, ClientMessage, ReceiveSession, ReceiveState, ReceiveStatus, Receiver,
+    SendInfo, Sender, ServerMessage,
+};
 use axum::{
     body::Bytes,
     extract::{BodyStream, Query, State},
@@ -11,12 +14,11 @@ use futures::{Stream, TryStreamExt};
 use std::{collections::HashMap, path::Path};
 use std::{io, net::SocketAddr};
 use std::{path::PathBuf, sync::Arc};
-use tokio::{fs::File, io::BufWriter, sync::Mutex};
+use tokio::sync::Mutex;
+use tokio::{fs::File, io::BufWriter};
 use tokio_util::io::StreamReader;
 use tracing::{info, trace};
 use uuid::Uuid;
-
-type ReceiveState = Arc<Mutex<Option<ReceiveSession>>>;
 
 pub struct Server {
     certificate: rcgen::Certificate,
@@ -35,18 +37,23 @@ impl Server {
         }
     }
 
-    pub async fn start_server(&self) {
+    pub async fn start_server(&self, server_tx: Sender, client_rx: Receiver) {
         let cert_pem = self.certificate.serialize_pem().unwrap();
         let private_key_pem = self.certificate.serialize_private_key_pem();
         let config = RustlsConfig::from_pem(cert_pem.into_bytes(), private_key_pem.into_bytes())
             .await
             .unwrap();
-        let session_state = Arc::new(Mutex::new(None));
+
+        let app_state = Arc::new(Mutex::new(AppState {
+            server_tx,
+            client_rx,
+            receive_session: None,
+        }));
 
         let app = Router::new()
             .route("/api/localsend/v1/send-request", post(Self::send_request))
             .route("/api/localsend/v1/send", post(Self::incoming_send_post))
-            .with_state(session_state);
+            .with_state(app_state);
 
         let addr = SocketAddr::from(([0, 0, 0, 0], crate::MULTICAST_PORT));
         info!("listening on {}", addr);
@@ -63,38 +70,18 @@ impl Server {
         trace!("got request {:#?}", send_request);
 
         let mut session = session_state.lock().await;
-        if session.is_some() {
+        if session.receive_session.is_some() {
             // reject incoming request if another session is ongoing
             return Err((StatusCode::CONFLICT, "Blocked by another sesssion".into()));
         }
 
-        use tokio::io::{AsyncBufReadExt, AsyncWriteExt};
-        let mut stdout = tokio::io::stdout();
-        let _ = stdout
-            .write_all(
-                format!(
-                    "Do you want to accept the send request from {} [y/n]? ",
-                    send_request.device_info.alias
-                )
-                .as_bytes(),
-            )
-            .await;
-        let _ = stdout.flush().await;
-
-        let mut buf = Vec::new();
-        let mut reader = tokio::io::BufReader::new(tokio::io::stdin());
-        let _ = reader.read_until(b'\n', &mut buf).await;
-        let input = std::str::from_utf8(&buf).unwrap();
-        let input = input.trim();
-
-        // TODO: this should be handled from the binary crate. how can i do that?
-        // mpsc channel?
-        if input != "y" && input != "Y" {
+        let _ = session.server_tx.send(ServerMessage::SendRequest);
+        if let Some(ClientMessage::Decline) = session.client_rx.recv().await {
             return Err((StatusCode::FORBIDDEN, "User declined the request".into()));
         }
 
         // TODO: create destination_directory if it doesn't exist
-        let state = session.insert(ReceiveSession::new(
+        let state = session.receive_session.insert(ReceiveSession::new(
             send_request.device_info,
             "./test_files/".into(),
         ));
@@ -125,16 +112,17 @@ impl Server {
         let mut session = session_state.lock().await;
         // https://users.rust-lang.org/t/strange-compiler-error-bug-axum-handler/71352/3
         // https://github.com/tokio-rs/axum/discussions/641
-        if session.is_none() {
+        if session.receive_session.is_none() {
             return Err((
                 StatusCode::INTERNAL_SERVER_ERROR,
                 "Call to /send without requesting a send".into(),
             ));
         }
+        let _ = session.server_tx.send(ServerMessage::SendFileRequest);
 
         let file_id = params.file_id.clone();
         let (dest_dir, file_info) = {
-            let mut state = session.as_mut().unwrap();
+            let mut state = session.receive_session.as_mut().unwrap();
             state.status = ReceiveStatus::Receiving;
             (
                 // TODO: don't use clones
@@ -147,7 +135,7 @@ impl Server {
         let result = stream_to_file(path, file_stream).await;
 
         let all_finished = {
-            let mut state = session.as_mut().unwrap();
+            let mut state = session.receive_session.as_mut().unwrap();
             state.file_status.entry(file_id).and_modify(|file_status| {
                 *file_status = if result.is_ok() {
                     ReceiveStatus::Finished
@@ -167,7 +155,7 @@ impl Server {
         };
 
         if all_finished {
-            *session = None;
+            session.receive_session = None;
         }
         return Ok(());
     }
