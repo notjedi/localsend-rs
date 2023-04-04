@@ -1,30 +1,24 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::time::Instant;
 
-// TODO: change all String to &str type
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct DeviceResponse {
-    #[serde(flatten)]
-    pub device_info: DeviceInfo,
-    pub announcement: bool,
-    pub fingerprint: String,
+#[serde(rename_all = "lowercase")]
+pub enum FileType {
+    Image,
+    Video,
+    Pdf,
+    Text,
+    Other,
 }
 
-impl From<DeviceInfo> for DeviceResponse {
-    fn from(device: DeviceInfo) -> Self {
-        Self {
-            device_info: device,
-            fingerprint: "".into(),
-            announcement: false,
-        }
-    }
-}
-
-impl PartialEq for DeviceResponse {
-    // https://www.reddit.com/r/rust/comments/t8d6wb/comment/hznabrt
-    fn eq(&self, other: &Self) -> bool {
-        self.fingerprint == other.fingerprint
-    }
+#[derive(Clone, PartialEq, Debug)]
+pub enum ReceiveStatus {
+    // TODO: add status for cancelled
+    Waiting,            // waiting for sender to send the files
+    Receiving,          // in an ongoing session, receiving files
+    Finished,           // all files received (end of session)
+    FinishedWithErrors, // finished but some files could not be received (end of session)
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -57,14 +51,30 @@ impl Default for DeviceInfo {
     }
 }
 
+// TODO: change all String to &str type
 #[derive(Clone, Debug, Serialize, Deserialize)]
-#[serde(rename_all = "lowercase")]
-pub enum FileType {
-    Image,
-    Video,
-    Pdf,
-    Text,
-    Other,
+pub struct DeviceResponse {
+    #[serde(flatten)]
+    pub device_info: DeviceInfo,
+    pub announcement: bool,
+    pub fingerprint: String,
+}
+
+impl From<DeviceInfo> for DeviceResponse {
+    fn from(device: DeviceInfo) -> Self {
+        Self {
+            device_info: device,
+            fingerprint: "".into(),
+            announcement: false,
+        }
+    }
+}
+
+impl PartialEq for DeviceResponse {
+    // https://www.reddit.com/r/rust/comments/t8d6wb/comment/hznabrt
+    fn eq(&self, other: &Self) -> bool {
+        self.fingerprint == other.fingerprint
+    }
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -90,4 +100,27 @@ pub struct SendRequest {
 pub struct SendInfo {
     pub file_id: String,
     pub token: String,
+}
+
+#[derive(Clone)]
+pub struct ReceiveSession {
+    pub sender: DeviceInfo,
+    pub files: HashMap<String, FileInfo>,
+    pub file_status: HashMap<String, ReceiveStatus>,
+    pub destination_directory: String,
+    pub start_time: Instant,
+    pub status: ReceiveStatus,
+}
+
+impl ReceiveSession {
+    pub fn new(sender: DeviceInfo, destination_directory: String) -> Self {
+        Self {
+            sender,
+            destination_directory,
+            files: HashMap::new(),
+            file_status: HashMap::new(),
+            start_time: Instant::now(),
+            status: ReceiveStatus::Waiting,
+        }
+    }
 }

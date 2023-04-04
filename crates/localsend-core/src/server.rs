@@ -1,4 +1,4 @@
-use crate::{utils, DeviceInfo, FileInfo, SendInfo};
+use crate::{utils, ReceiveSession, ReceiveStatus, SendInfo};
 use axum::{
     body::Bytes,
     extract::{BodyStream, Query, State},
@@ -8,7 +8,6 @@ use axum::{
 };
 use axum_server::tls_rustls::RustlsConfig;
 use futures::{Stream, TryStreamExt};
-use std::time::Instant;
 use std::{collections::HashMap, path::Path};
 use std::{io, net::SocketAddr};
 use std::{path::PathBuf, sync::Arc};
@@ -18,38 +17,6 @@ use tracing::{info, trace};
 use uuid::Uuid;
 
 type ReceiveState = Arc<Mutex<Option<ReceiveSession>>>;
-
-#[derive(Clone, PartialEq, Debug)]
-pub enum ReceiveStatus {
-    // TODO: add status for cancelled
-    Waiting,            // waiting for sender to send the files
-    Receiving,          // in an ongoing session, receiving files
-    Finished,           // all files received (end of session)
-    FinishedWithErrors, // finished but some files could not be received (end of session)
-}
-
-#[derive(Clone)]
-pub struct ReceiveSession {
-    pub sender: DeviceInfo,
-    pub files: HashMap<String, FileInfo>,
-    pub file_status: HashMap<String, ReceiveStatus>,
-    pub destination_directory: String,
-    pub start_time: Instant,
-    pub status: ReceiveStatus,
-}
-
-impl ReceiveSession {
-    fn new(sender: DeviceInfo, destination_directory: String) -> Self {
-        Self {
-            sender,
-            destination_directory,
-            files: HashMap::new(),
-            file_status: HashMap::new(),
-            start_time: Instant::now(),
-            status: ReceiveStatus::Waiting,
-        }
-    }
-}
 
 pub struct Server {
     certificate: rcgen::Certificate,
