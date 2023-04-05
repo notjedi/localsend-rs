@@ -1,5 +1,5 @@
 use std::io;
-use std::process::exit;
+use std::time::Duration;
 
 use crossterm::event::{
     self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode, KeyModifiers,
@@ -9,6 +9,7 @@ use crossterm::terminal::{
     disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen,
 };
 use localsend_core::{ClientMessage, DeviceScanner, Server, ServerMessage};
+use tokio::runtime;
 use tokio::sync::mpsc;
 use tracing::debug;
 use tracing_subscriber::filter::{EnvFilter, LevelFilter};
@@ -46,10 +47,20 @@ impl<'a> App<'a> {
     }
 }
 
-#[tokio::main]
-async fn main() {
+fn main() {
     init_tracing_logger();
+    let runtime = runtime::Builder::new_multi_thread()
+        .enable_all()
+        .build()
+        .unwrap();
 
+    let _ = runtime.block_on(async_main());
+    // https://stackoverflow.com/questions/73528236/how-to-terminate-a-blocking-tokio-task
+    // start_device_scanner blocks exit, so set timeout or use async_std crate (adds to the binary size and compile time)
+    runtime.shutdown_timeout(Duration::from_millis(1));
+}
+
+async fn async_main() -> Result<(), io::Error> {
     // spawn task to listen and announce multicast messages
     start_device_scanner();
 
@@ -96,31 +107,29 @@ async fn main() {
         server.start_server(server_tx, client_rx).await;
     });
 
-    enable_raw_mode().unwrap();
+    enable_raw_mode()?;
     let mut stdout = io::stdout();
-    execute!(stdout, EnterAlternateScreen, EnableMouseCapture).unwrap();
+    execute!(stdout, EnterAlternateScreen, EnableMouseCapture)?;
     let backend = CrosstermBackend::new(stdout);
-    let mut terminal = Terminal::new(backend).unwrap();
+    let mut terminal = Terminal::new(backend)?;
 
     // create app and run it
     let app = App::new();
     let res = run_app(&mut terminal, app);
 
     // restore terminal
-    disable_raw_mode().unwrap();
+    disable_raw_mode()?;
     execute!(
         terminal.backend_mut(),
         LeaveAlternateScreen,
         DisableMouseCapture
-    )
-    .unwrap();
-    terminal.show_cursor().unwrap();
+    )?;
+    terminal.show_cursor()?;
 
     if let Err(err) = res {
         println!("{:?}", err);
-        exit(1);
     }
-    exit(0);
+    return Ok(());
 }
 
 fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> io::Result<()> {
