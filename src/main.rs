@@ -29,7 +29,7 @@ struct App<'a> {
 impl<'a> App<'a> {
     fn new() -> App<'a> {
         App {
-            titles: vec!["Tab0", "Tab1", "Tab2", "Tab3"],
+            titles: vec!["Receive", "Send", "About"],
             index: 0,
         }
     }
@@ -45,11 +45,16 @@ impl<'a> App<'a> {
             self.index = self.titles.len() - 1;
         }
     }
+
+    pub fn goto(&mut self, tab: usize) {
+        self.index = tab;
+    }
 }
 
 fn main() {
     init_tracing_logger();
-    let runtime = runtime::Builder::new_multi_thread()
+    // TODO: should i use new_current_thread or new_multi_thread?
+    let runtime = runtime::Builder::new_current_thread()
         .enable_all()
         .build()
         .unwrap();
@@ -113,7 +118,6 @@ async fn async_main() -> Result<(), io::Error> {
     let backend = CrosstermBackend::new(stdout);
     let mut terminal = Terminal::new(backend)?;
 
-    // create app and run it
     let app = App::new();
     let res = run_app(&mut terminal, app);
 
@@ -144,8 +148,13 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> io::Result<(
                         return Ok(());
                     }
                 }
-                KeyCode::Right => app.next(),
-                KeyCode::Left => app.previous(),
+
+                KeyCode::Char('r') | KeyCode::Char('R') => app.goto(0),
+                KeyCode::Char('s') | KeyCode::Char('S') => app.goto(1),
+                KeyCode::Char('a') | KeyCode::Char('A') => app.goto(2),
+
+                KeyCode::Right | KeyCode::Char('l') => app.next(),
+                KeyCode::Left | KeyCode::Char('h') => app.previous(),
                 _ => {}
             }
         }
@@ -156,11 +165,11 @@ fn ui<B: Backend>(f: &mut Frame<B>, app: &App) {
     let size = f.size();
     let chunks = Layout::default()
         .direction(Direction::Vertical)
-        .margin(5)
+        .margin(2)
         .constraints([Constraint::Length(3), Constraint::Min(0)].as_ref())
         .split(size);
 
-    let block = Block::default().style(Style::default().bg(Color::White).fg(Color::Black));
+    let block = Block::default();
     f.render_widget(block, size);
     let titles = app
         .titles
@@ -180,16 +189,11 @@ fn ui<B: Backend>(f: &mut Frame<B>, app: &App) {
         .highlight_style(
             Style::default()
                 .add_modifier(Modifier::BOLD)
-                .bg(Color::Black),
+                .add_modifier(Modifier::ITALIC),
         );
     f.render_widget(tabs, chunks[0]);
-    let inner = match app.index {
-        0 => Block::default().title("Inner 0").borders(Borders::ALL),
-        1 => Block::default().title("Inner 1").borders(Borders::ALL),
-        2 => Block::default().title("Inner 2").borders(Borders::ALL),
-        3 => Block::default().title("Inner 3").borders(Borders::ALL),
-        _ => unreachable!(),
-    };
+
+    let inner = Block::default().borders(Borders::ALL);
     f.render_widget(inner, chunks[1]);
 }
 

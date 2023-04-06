@@ -23,3 +23,6 @@ localsend-core = { path = "crates/localsend-core", package = "localsend-core" }
 
 [workspace]
 members = ["crates/localsend-core", "crates/axum-server", "crates/rustls"]
+
+[profile.release]
+strip = "symbols"
