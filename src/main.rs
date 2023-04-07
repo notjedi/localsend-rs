@@ -1,6 +1,9 @@
 use std::io;
 use std::time::Duration;
 
+use console::style;
+use dialoguer::MultiSelect;
+use dialoguer::{theme::ColorfulTheme, Confirm};
 use localsend_core::{ClientMessage, DeviceScanner, Server, ServerMessage};
 use tokio::runtime;
 use tokio::sync::mpsc;
@@ -34,31 +37,39 @@ async fn async_main() -> Result<(), io::Error> {
         while let Some(server_message) = server_rx.recv().await {
             debug!("{:?}", &server_message);
             match server_message {
-                ServerMessage::SendFileRequest => {}
+                ServerMessage::SendFileRequest(_) => {}
                 ServerMessage::SendRequest(send_request) => {
-                    use tokio::io::{AsyncBufReadExt, AsyncWriteExt};
-                    let mut stdout = tokio::io::stdout();
-                    let _ = stdout
-                        .write_all(
-                            format!(
-                                "Do you want to accept the send request from {} [y/n]? ",
-                                send_request.device_info.alias
-                            )
-                            .as_bytes(),
+                    println!(
+                        "{} wants to send you the following files:\n",
+                        style(send_request.device_info.alias).bold().magenta()
+                    );
+
+                    let selections = MultiSelect::with_theme(&ColorfulTheme::default())
+                        .with_prompt("Select the files you want to receive")
+                        .items(
+                            &send_request
+                                .files
+                                .values()
+                                .map(|file_info| file_info.file_name.as_str())
+                                .collect::<Vec<&str>>(),
                         )
-                        .await;
-                    let _ = stdout.flush().await;
+                        .interact()
+                        .unwrap();
 
-                    let mut buf = Vec::new();
-                    let mut reader = tokio::io::BufReader::new(tokio::io::stdin());
-                    let _ = reader.read_until(b'\n', &mut buf).await;
-                    let input = std::str::from_utf8(&buf).unwrap();
-                    let input = input.trim();
-
-                    if input != "y" && input != "Y" {
+                    if selections.is_empty() {
                         let _ = client_tx.send(ClientMessage::Decline);
                     } else {
-                        let _ = client_tx.send(ClientMessage::Allow);
+                        let file_ids = send_request
+                            .files
+                            .keys()
+                            .map(|file_id| file_id.as_str())
+                            .collect::<Vec<&str>>();
+
+                        let selected_file_ids = selections
+                            .into_iter()
+                            .map(|idx| String::from(file_ids[idx]))
+                            .collect::<Vec<_>>();
+                        let _ = client_tx.send(ClientMessage::Allow(selected_file_ids));
                     }
                 }
             }

@@ -18,6 +18,7 @@ tracing-log = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 tokio = { version = "1.27", features = ["rt-multi-thread", "signal"] }
 
+console = "0.15"
 indicatif = "0.17"
 dialoguer = "0.10"
 
