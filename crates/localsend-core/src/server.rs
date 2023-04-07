@@ -37,7 +37,11 @@ impl Server {
         }
     }
 
-    pub async fn start_server(&self, server_tx: Sender, client_rx: Receiver) {
+    pub async fn start_server(
+        &self,
+        server_tx: Sender<ServerMessage>,
+        client_rx: Receiver<ClientMessage>,
+    ) {
         let cert_pem = self.certificate.serialize_pem().unwrap();
         let private_key_pem = self.certificate.serialize_private_key_pem();
         let config = RustlsConfig::from_pem(cert_pem.into_bytes(), private_key_pem.into_bytes())

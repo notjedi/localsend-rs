@@ -8,8 +8,8 @@ use tokio::sync::{
 };
 
 pub type ReceiveState = Arc<Mutex<AppState>>;
-pub type Sender = UnboundedSender<ServerMessage>;
-pub type Receiver = UnboundedReceiver<ClientMessage>;
+pub type Sender<T> = UnboundedSender<T>;
+pub type Receiver<T> = UnboundedReceiver<T>;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -147,7 +147,7 @@ impl ReceiveSession {
 }
 
 pub struct AppState {
-    pub(crate) server_tx: Sender,
-    pub(crate) client_rx: Receiver,
+    pub(crate) server_tx: Sender<ServerMessage>,
+    pub(crate) client_rx: Receiver<ClientMessage>,
     pub(crate) receive_session: Option<ReceiveSession>,
 }

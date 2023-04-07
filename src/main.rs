@@ -12,6 +12,7 @@ use localsend_core::{ClientMessage, DeviceScanner, Server, ServerMessage};
 use tokio::runtime;
 use tokio::sync::mpsc;
 use tracing::debug;
+use tracing_log::LogTracer;
 use tracing_subscriber::filter::{EnvFilter, LevelFilter};
 use tracing_subscriber::FmtSubscriber;
 use tui::backend::{Backend, CrosstermBackend};
@@ -171,6 +172,7 @@ fn ui<B: Backend>(f: &mut Frame<B>, app: &App) {
 
     let block = Block::default();
     f.render_widget(block, size);
+
     let titles = app
         .titles
         .iter()
@@ -218,4 +220,7 @@ fn init_tracing_logger() {
         .without_time()
         .finish();
     tracing::subscriber::set_global_default(subscriber).expect("setting default subscriber failed");
+
+    // forward log's from the log crate to tracing
+    LogTracer::init().unwrap();
 }
