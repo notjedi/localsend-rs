@@ -18,8 +18,9 @@ tracing-log = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 tokio = { version = "1.27", features = ["rt-multi-thread", "signal"] }
 
-crossterm = "0.26"
-tui = { package = "ratatui", version = "0.20" }
+indicatif = "0.17"
+dialoguer = "0.10"
+
 localsend-core = { path = "crates/localsend-core", package = "localsend-core" }
 
 [workspace]
