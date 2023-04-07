@@ -2,14 +2,13 @@ use std::io;
 use std::time::Duration;
 
 use console::style;
+use dialoguer::theme::ColorfulTheme;
 use dialoguer::MultiSelect;
-use dialoguer::{theme::ColorfulTheme, Confirm};
 use localsend_core::{ClientMessage, DeviceScanner, Server, ServerMessage};
 use tokio::runtime;
 use tokio::sync::mpsc;
 use tracing::debug;
-use tracing_log::LogTracer;
-use tracing_subscriber::filter::{EnvFilter, LevelFilter};
+use tracing_subscriber::filter::EnvFilter;
 use tracing_subscriber::FmtSubscriber;
 
 fn main() {
@@ -92,17 +91,27 @@ fn start_device_scanner() {
 }
 
 fn init_tracing_logger() {
-    let subscriber = FmtSubscriber::builder()
+    let mut subscriber_builder = FmtSubscriber::builder()
         .with_env_filter(
             EnvFilter::builder()
-                .with_default_directive(LevelFilter::INFO.into())
+                .with_default_directive(tracing_subscriber::filter::LevelFilter::INFO.into())
                 .from_env_lossy(),
         )
-        .with_line_number(true)
-        .without_time()
-        .finish();
+        .without_time();
+
+    if cfg!(debug_assertions) {
+        subscriber_builder = subscriber_builder.with_line_number(true);
+    }
+    let subscriber = subscriber_builder.finish();
     tracing::subscriber::set_global_default(subscriber).expect("setting default subscriber failed");
 
     // forward log's from the log crate to tracing
-    LogTracer::init().unwrap();
+    #[cfg(debug_assertions)]
+    {
+        use tracing_log::LogTracer;
+        LogTracer::builder()
+            .with_max_level(tracing_log::log::LevelFilter::Info)
+            .init()
+            .unwrap();
+    }
 }
