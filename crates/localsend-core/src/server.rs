@@ -82,29 +82,35 @@ impl Server {
         let _ = session
             .server_tx
             .send(ServerMessage::SendRequest(send_request.clone()));
-        if let Some(ClientMessage::Decline) = session.client_rx.recv().await {
-            return Err((StatusCode::FORBIDDEN, "User declined the request".into()));
+        let response = session.client_rx.recv().await;
+
+        match response {
+            Some(ClientMessage::Decline) | None => {
+                return Err((StatusCode::FORBIDDEN, "User declined the request".into()));
+            }
+            Some(ClientMessage::Allow(file_ids)) => {
+                // TODO: create destination_directory if it doesn't exist
+                let state = session.receive_session.insert(ReceiveSession::new(
+                    send_request.device_info,
+                    "./test_files/".into(),
+                ));
+
+                // TODO(notjedi): yo, why so many clones?
+                let mut wanted_files: HashMap<String, String> = HashMap::new();
+                file_ids.into_iter().for_each(|file_id| {
+                    let token = Uuid::new_v4();
+                    wanted_files.insert(file_id.clone(), token.to_string());
+                    state
+                        .files
+                        .insert(file_id.clone(), send_request.files[&file_id].clone());
+                    state.file_status.insert(file_id, ReceiveStatus::Waiting);
+                });
+
+                trace!("{:#?}", &wanted_files);
+                trace!("{:#?}, ", &state.files);
+                return Ok(Json(wanted_files));
+            }
         }
-
-        // TODO: create destination_directory if it doesn't exist
-        let state = session.receive_session.insert(ReceiveSession::new(
-            send_request.device_info,
-            "./test_files/".into(),
-        ));
-
-        let mut wanted_files: HashMap<String, String> = HashMap::new();
-        send_request
-            .files
-            .into_iter()
-            .for_each(|(file_id, file_info)| {
-                let token = Uuid::new_v4();
-                wanted_files.insert(file_id.clone(), token.to_string());
-                state.files.insert(file_id.clone(), file_info);
-                state.file_status.insert(file_id, ReceiveStatus::Waiting);
-            });
-        trace!("{:#?}", &wanted_files);
-        trace!("{:#?}, ", &state.files);
-        Ok(Json(wanted_files))
     }
 
     async fn incoming_send_post(
@@ -122,7 +128,10 @@ impl Server {
                 "Call to /send without requesting a send".into(),
             ));
         }
-        let _ = session.server_tx.send(ServerMessage::SendFileRequest);
+
+        let _ = session
+            .server_tx
+            .send(ServerMessage::SendFileRequest(params.file_id.clone()));
 
         let mut receive_session = session.receive_session.as_mut().unwrap();
         receive_session.status = ReceiveStatus::Receiving;
@@ -130,6 +139,7 @@ impl Server {
         let file_id = params.file_id.clone();
         let path = Path::new(&receive_session.destination_directory)
             .join(&receive_session.files[&params.file_id].file_name);
+
         let result = stream_to_file(path, file_stream).await;
 
         receive_session

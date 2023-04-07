@@ -32,14 +32,14 @@ pub enum ReceiveStatus {
 
 #[derive(Clone, Debug)]
 pub enum ClientMessage {
-    Allow,
+    Allow(Vec<String>),
     Decline,
 }
 
 #[derive(Clone, Debug)]
 pub enum ServerMessage {
     SendRequest(SendRequest),
-    SendFileRequest,
+    SendFileRequest(String),
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
