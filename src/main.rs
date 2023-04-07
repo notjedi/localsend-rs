@@ -52,6 +52,7 @@ async fn async_main() -> Result<(), io::Error> {
                                 .map(|file_info| file_info.file_name.as_str())
                                 .collect::<Vec<&str>>(),
                         )
+                        .defaults(&vec![true; send_request.files.len()].as_slice())
                         .interact()
                         .unwrap();
 
