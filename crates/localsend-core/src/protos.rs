@@ -40,7 +40,6 @@ pub enum ClientMessage {
 pub enum ServerMessage {
     SendRequest(SendRequest),
     SendFileRequest(String),
-SendRequestAccepted(HashMap<String, FileInfo>),
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

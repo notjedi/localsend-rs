@@ -38,33 +38,6 @@ async fn async_main() -> Result<(), io::Error> {
         while let Some(server_message) = server_rx.recv().await {
             debug!("{:?}", &server_message);
             match server_message {
-                ServerMessage::SendRequestAccepted(file_infos) => {
-                    let spinner_style =
-                        ProgressStyle::with_template("{prefix:.bold.dim} {spinner} {wide_msg}")
-                            .unwrap()
-                            .tick_chars("⠁⠂⠄⡀⢀⠠⠐⠈ ");
-
-                    let multi_progress = MultiProgress::new();
-                    let progress_map = file_infos
-                        .into_iter()
-                        .map(|(file_id, file_info)| {
-                            let pb = multi_progress.add(ProgressBar::new(10_000_000));
-                            pb.set_style(spinner_style.clone());
-                            pb.set_message(file_info.file_name.clone());
-                            (file_id, pb)
-                        })
-                        .collect::<HashMap<String, ProgressBar>>();
-
-                    // TODO(notjedi): remove this test progress bar
-                    for (file_id, pb) in progress_map {
-                        for _ in 0..10_000_000 {
-                            pb.inc(1);
-                        }
-                        multi_progress
-                            .println(format!("Received {}", file_id))
-                            .unwrap();
-                    }
-                }
                 ServerMessage::SendFileRequest(_) => {}
                 ServerMessage::SendRequest(send_request) => {
                     println!(
@@ -99,6 +72,33 @@ async fn async_main() -> Result<(), io::Error> {
                             .map(|idx| String::from(file_ids[idx]))
                             .collect::<Vec<_>>();
                         let _ = client_tx.send(ClientMessage::Allow(selected_file_ids));
+
+                        let spinner_style =
+                            ProgressStyle::with_template("{prefix:.bold.dim} {spinner} {wide_msg}")
+                                .unwrap()
+                                .tick_chars("⠁⠂⠄⡀⢀⠠⠐⠈ ");
+
+                        let multi_progress = MultiProgress::new();
+                        let progress_map = send_request
+                            .files
+                            .into_iter()
+                            .map(|(file_id, file_info)| {
+                                let pb = multi_progress.add(ProgressBar::new(10_000_000));
+                                pb.set_style(spinner_style.clone());
+                                pb.set_message(file_info.file_name.clone());
+                                (file_id, pb)
+                            })
+                            .collect::<HashMap<String, ProgressBar>>();
+
+                        // TODO(notjedi): remove this test progress bar
+                        for (file_id, pb) in progress_map {
+                            for _ in 0..10_000_000 {
+                                pb.inc(1);
+                            }
+                            multi_progress
+                                .println(format!("Received {}", file_id))
+                                .unwrap();
+                        }
                     }
                 }
             }

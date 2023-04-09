@@ -90,30 +90,24 @@ impl Server {
             }
             Some(ClientMessage::Allow(file_ids)) => {
                 // TODO: create destination_directory if it doesn't exist
-                let (wanted_files, files) = {
-                    let state = session.receive_session.insert(ReceiveSession::new(
-                        send_request.device_info,
-                        "./test_files/".into(),
-                    ));
+                let state = session.receive_session.insert(ReceiveSession::new(
+                    send_request.device_info,
+                    "./test_files/".into(),
+                ));
 
-                    // TODO(notjedi): yo, why so many clones?
-                    let mut wanted_files: HashMap<String, String> = HashMap::new();
-                    file_ids.into_iter().for_each(|file_id| {
-                        let token = Uuid::new_v4();
-                        wanted_files.insert(file_id.clone(), token.to_string());
-                        state
-                            .files
-                            .insert(file_id.clone(), send_request.files[&file_id].clone());
-                        state.file_status.insert(file_id, ReceiveStatus::Waiting);
-                    });
-                    (wanted_files, state.files.clone())
-                };
+                // TODO(notjedi): yo, why so many clones?
+                let mut wanted_files: HashMap<String, String> = HashMap::new();
+                file_ids.into_iter().for_each(|file_id| {
+                    let token = Uuid::new_v4();
+                    wanted_files.insert(file_id.clone(), token.to_string());
+                    state
+                        .files
+                        .insert(file_id.clone(), send_request.files[&file_id].clone());
+                    state.file_status.insert(file_id, ReceiveStatus::Waiting);
+                });
                 trace!("{:#?}", &wanted_files);
-                trace!("{:#?}, ", &files);
+                trace!("{:#?}, ", &state.files);
 
-                let _ = session
-                    .server_tx
-                    .send(ServerMessage::SendRequestAccepted(files));
                 return Ok(Json(wanted_files));
             }
         }
