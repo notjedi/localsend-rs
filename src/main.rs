@@ -1,11 +1,12 @@
 use std::collections::HashMap;
+use std::fmt::Write;
 use std::io;
 use std::time::Duration;
 
 use console::style;
 use dialoguer::theme::ColorfulTheme;
 use dialoguer::MultiSelect;
-use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
+use indicatif::{MultiProgress, ProgressBar, ProgressState, ProgressStyle};
 use localsend_core::{ClientMessage, DeviceScanner, FileInfo, Server, ServerMessage};
 use tokio::runtime;
 use tokio::sync::mpsc;
@@ -46,16 +47,18 @@ async fn async_main() -> Result<(), io::Error> {
         while let Some(server_message) = server_rx.recv().await {
             debug!("{:?}", &server_message);
             match server_message {
-                ServerMessage::SendFileRequest(file_id) => match client_state.as_ref() {
+                ServerMessage::SendFileRequest((file_id, size)) => match client_state.as_ref() {
                     Some(state) => {
-                        // for _ in 0..state.files[&file_id].size {
-                        //     state.progress_map[&file_id].inc(1);
-                        // }
-                        state.progress_map[&file_id].inc(state.files[&file_id].size as u64);
-                        state
-                            .multi_progress
-                            .println(format!("Received {}", state.files[&file_id].file_name))
-                            .unwrap();
+                        state.progress_map[&file_id].inc(size as u64);
+                        if state.progress_map[&file_id].position()
+                            == (state.files[&file_id].size as u64)
+                        {
+                            state.progress_map[&file_id].finish_and_clear();
+                            state
+                                .multi_progress
+                                .println(format!("Received {}", state.files[&file_id].file_name))
+                                .unwrap();
+                        }
                     }
                     None => {
                         info!("client_state is None. this shouldn't be happening as this block is unreachable.")
@@ -95,11 +98,6 @@ async fn async_main() -> Result<(), io::Error> {
                             .collect::<Vec<_>>();
                         let _ = client_tx.send(ClientMessage::Allow(selected_file_ids));
 
-                        let spinner_style =
-                            ProgressStyle::with_template("{prefix:.bold.dim} {spinner} {wide_msg}")
-                                .unwrap()
-                                .tick_chars("⠁⠂⠄⡀⢀⠠⠐⠈ ");
-
                         let multi_progress = MultiProgress::new();
                         let progress_map = send_request
                             .files
@@ -109,7 +107,12 @@ async fn async_main() -> Result<(), io::Error> {
                                 // TODO(notjedi): change length ot size of file
                                 let pb =
                                     multi_progress.add(ProgressBar::new(file_info.size as u64));
-                                pb.set_style(spinner_style.clone());
+
+                                pb.set_style(ProgressStyle::with_template("{spinner:.green} [{msg}] [{wide_bar:.cyan/blue}] {bytes}/{total_bytes} ({eta})")
+                                    .unwrap()
+                                    .with_key("eta", |state: &ProgressState, w: &mut dyn Write| write!(w, "{:.1}s", state.eta().as_secs_f64()).unwrap())
+                                    .progress_chars("#>-"));
+
                                 pb.set_message(file_info.file_name.clone());
                                 (file_id, pb)
                             })
