@@ -133,6 +133,19 @@ impl Server {
             .server_tx
             .send(ServerMessage::SendFileRequest(params.file_id.clone()));
 
+        if !session
+            .receive_session
+            .as_ref()
+            .unwrap()
+            .files
+            .contains_key(&params.file_id)
+        {
+            return Err((
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("Call to /send with unknown file id {}", params.file_id).into(),
+            ));
+        }
+
         let mut receive_session = session.receive_session.as_mut().unwrap();
         receive_session.status = ReceiveStatus::Receiving;
 

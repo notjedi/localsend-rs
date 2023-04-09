@@ -6,10 +6,10 @@ use console::style;
 use dialoguer::theme::ColorfulTheme;
 use dialoguer::MultiSelect;
 use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
-use localsend_core::{ClientMessage, DeviceScanner, Server, ServerMessage};
+use localsend_core::{ClientMessage, DeviceScanner, FileInfo, Server, ServerMessage};
 use tokio::runtime;
 use tokio::sync::mpsc;
-use tracing::debug;
+use tracing::{debug, info};
 use tracing_subscriber::filter::EnvFilter;
 use tracing_subscriber::FmtSubscriber;
 
@@ -34,11 +34,33 @@ async fn async_main() -> Result<(), io::Error> {
     let (server_tx, mut server_rx) = mpsc::unbounded_channel();
     let (client_tx, client_rx) = mpsc::unbounded_channel();
 
+    struct State {
+        multi_progress: MultiProgress,
+        files: HashMap<String, FileInfo>,
+        progress_map: HashMap<String, ProgressBar>,
+    }
+
     tokio::spawn(async move {
+        let mut client_state: Option<State> = None;
+
         while let Some(server_message) = server_rx.recv().await {
             debug!("{:?}", &server_message);
             match server_message {
-                ServerMessage::SendFileRequest(_) => {}
+                ServerMessage::SendFileRequest(file_id) => match client_state.as_ref() {
+                    Some(state) => {
+                        // for _ in 0..state.files[&file_id].size {
+                        //     state.progress_map[&file_id].inc(1);
+                        // }
+                        state.progress_map[&file_id].inc(state.files[&file_id].size as u64);
+                        state
+                            .multi_progress
+                            .println(format!("Received {}", state.files[&file_id].file_name))
+                            .unwrap();
+                    }
+                    None => {
+                        info!("client_state is None. this shouldn't be happening as this block is unreachable.")
+                    }
+                },
                 ServerMessage::SendRequest(send_request) => {
                     println!(
                         "{} wants to send you the following files:\n",
@@ -81,24 +103,23 @@ async fn async_main() -> Result<(), io::Error> {
                         let multi_progress = MultiProgress::new();
                         let progress_map = send_request
                             .files
+                            .clone()
                             .into_iter()
                             .map(|(file_id, file_info)| {
-                                let pb = multi_progress.add(ProgressBar::new(10_000_000));
+                                // TODO(notjedi): change length ot size of file
+                                let pb =
+                                    multi_progress.add(ProgressBar::new(file_info.size as u64));
                                 pb.set_style(spinner_style.clone());
                                 pb.set_message(file_info.file_name.clone());
                                 (file_id, pb)
                             })
                             .collect::<HashMap<String, ProgressBar>>();
 
-                        // TODO(notjedi): remove this test progress bar
-                        for (file_id, pb) in progress_map {
-                            for _ in 0..10_000_000 {
-                                pb.inc(1);
-                            }
-                            multi_progress
-                                .println(format!("Received {}", file_id))
-                                .unwrap();
-                        }
+                        client_state = Some(State {
+                            files: send_request.files,
+                            multi_progress,
+                            progress_map,
+                        });
                     }
                 }
             }
