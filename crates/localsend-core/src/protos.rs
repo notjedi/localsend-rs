@@ -39,7 +39,7 @@ pub enum ClientMessage {
 #[derive(Clone, Debug)]
 pub enum ServerMessage {
     SendRequest(SendRequest),
-    SendFileRequest(String),
+    SendFileRequest((String, usize)),
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

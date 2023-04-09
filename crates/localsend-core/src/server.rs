@@ -14,8 +14,11 @@ use futures::{Stream, TryStreamExt};
 use std::{collections::HashMap, path::Path};
 use std::{io, net::SocketAddr};
 use std::{path::PathBuf, sync::Arc};
-use tokio::sync::Mutex;
 use tokio::{fs::File, io::BufWriter};
+use tokio::{
+    io::{AsyncReadExt, AsyncWriteExt},
+    sync::Mutex,
+};
 use tokio_util::io::StreamReader;
 use tracing::{info, trace};
 use uuid::Uuid;
@@ -131,7 +134,7 @@ impl Server {
 
         let _ = session
             .server_tx
-            .send(ServerMessage::SendFileRequest(params.file_id.clone()));
+            .send(ServerMessage::SendFileRequest((params.file_id.clone(), 0)));
 
         if !session
             .receive_session
@@ -146,6 +149,7 @@ impl Server {
             ));
         }
 
+        let sender = session.server_tx.clone();
         let mut receive_session = session.receive_session.as_mut().unwrap();
         receive_session.status = ReceiveStatus::Receiving;
 
@@ -153,7 +157,7 @@ impl Server {
         let path = Path::new(&receive_session.destination_directory)
             .join(&receive_session.files[&params.file_id].file_name);
 
-        let result = stream_to_file(path, file_stream).await;
+        let result = stream_to_file(path, file_stream, file_id.clone(), sender).await;
 
         receive_session
             .file_status
@@ -180,21 +184,46 @@ impl Server {
     }
 }
 
-// from: https://github.com/tokio-rs/axum/blob/main/examples/stream-to-file/src/main.rs
-async fn stream_to_file<S, E>(path: PathBuf, stream: S) -> std::io::Result<()>
+// taken and modified from: https://github.com/tokio-rs/axum/blob/main/examples/stream-to-file/src/main.rs
+async fn stream_to_file<S, E>(
+    path: PathBuf,
+    stream: S,
+    file_id: String,
+    sender: Sender<ServerMessage>,
+) -> std::io::Result<()>
 where
     S: Stream<Item = Result<Bytes, E>>,
     E: Into<BoxError>, // BoxError is just - Box<dyn std::error::Error + Send + Sync>
 {
-    // Convert the stream into an `AsyncRead`.
     let body_with_io_error = stream.map_err(|err| io::Error::new(io::ErrorKind::Other, err));
     let body_reader = StreamReader::new(body_with_io_error);
     futures::pin_mut!(body_reader);
 
-    // Create the file. `File` implements `AsyncWrite`.
-    let mut file = BufWriter::new(File::create(path).await?);
+    let file = File::create(path).await?;
+    let mut file_buf = BufWriter::with_capacity(16384, file);
 
-    // Copy the body into the file.
-    tokio::io::copy(&mut body_reader, &mut file).await?;
+    // read 1024 * 16 bytes on each read call
+    // can i directly write to the file buffer? rn we are copying data to a buf and writing that to the file
+    let mut buf = [0u8; 16384];
+    loop {
+        match body_reader.read(&mut buf[..]).await {
+            Ok(0) => {
+                break;
+            }
+            Ok(len) => {
+                // TODO: assert len(read) == len(written)
+                // TODO: don't unwrap
+                // TODO: no clones
+                let _ = file_buf.write(&buf[0..len]).await.unwrap();
+                let _ = sender.send(ServerMessage::SendFileRequest((file_id.clone(), len)));
+            }
+            Err(_) => {
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::UnexpectedEof,
+                    "Failed to read from stream",
+                ));
+            }
+        }
+    }
     Ok(())
 }
