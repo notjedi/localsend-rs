@@ -60,6 +60,7 @@ impl Server {
         let app = Router::new()
             .route("/api/localsend/v1/send-request", post(Self::send_request))
             .route("/api/localsend/v1/send", post(Self::incoming_send_post))
+            .route("/api/localsend/v1/cancel", post(Self::cancel))
             .with_state(app_state);
 
         let addr = SocketAddr::from(([0, 0, 0, 0], crate::MULTICAST_PORT));
@@ -68,6 +69,24 @@ impl Server {
             .serve(app.into_make_service())
             .await
             .unwrap();
+    }
+
+    async fn cancel(State(session_state): State<ReceiveState>) -> Result<(), (StatusCode, String)> {
+        let mut session = session_state.lock().await;
+        if session.receive_session.is_none() {
+            // reject incoming request if another session is ongoing
+            return Err((
+                StatusCode::BAD_REQUEST,
+                "Cannot cancel a non existant session".into(),
+            ));
+        }
+
+        info!("inside cancel request");
+        // TODO: check if cancel request is valid by comparing the ip address
+        let _ = session.server_tx.send(ServerMessage::CancelSession);
+
+        session.receive_session = None;
+        Ok(())
     }
 
     async fn send_request(
