@@ -44,23 +44,6 @@ async fn handle_server_msgs(
     while let Some(server_message) = server_rx.recv().await {
         debug!("{:?}", &server_message);
         match server_message {
-            ServerMessage::SendFileRequest((file_id, size)) => match client_state.as_ref() {
-                Some(state) => {
-                    state.progress_map[&file_id].inc(size as u64);
-                    if state.progress_map[&file_id].position()
-                        == (state.files[&file_id].size as u64)
-                    {
-                        state.progress_map[&file_id].finish_and_clear();
-                        state
-                            .multi_progress
-                            .println(format!("Received {}", state.files[&file_id].file_name))
-                            .unwrap();
-                    }
-                }
-                None => {
-                    info!("client_state is None. this shouldn't be happening as this block is unreachable.")
-                }
-            },
             ServerMessage::SendRequest(send_request) => {
                 println!(
                     "{} wants to send you the following files:\n",
@@ -122,6 +105,35 @@ async fn handle_server_msgs(
                     });
                 }
             }
+            ServerMessage::SendFileRequest((file_id, size)) => match client_state.as_ref() {
+                Some(state) => {
+                    state.progress_map[&file_id].inc(size as u64);
+                    if state.progress_map[&file_id].position()
+                        == (state.files[&file_id].size as u64)
+                    {
+                        state.progress_map[&file_id].finish_and_clear();
+                        state
+                            .multi_progress
+                            .println(format!("Received {}", state.files[&file_id].file_name))
+                            .unwrap();
+                    }
+                }
+                None => {
+                    info!("client_state is None. this shouldn't be happening as this block is unreachable.")
+                }
+            },
+            ServerMessage::CancelSession => match client_state.as_ref() {
+                Some(state) => {
+                    for (_, pb) in &state.progress_map {
+                        pb.finish_and_clear();
+                        state.multi_progress.println("Finished with error").unwrap();
+                    }
+                    client_state = None;
+                }
+                None => {
+                    info!("client_state is None. this shouldn't be happening as this block is unreachable.")
+                }
+            },
         }
     }
 }
