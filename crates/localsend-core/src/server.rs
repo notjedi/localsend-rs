@@ -81,7 +81,6 @@ impl Server {
             ));
         }
 
-        info!("inside cancel request");
         // TODO: check if cancel request is valid by comparing the ip address
         let _ = session.server_tx.send(ServerMessage::CancelSession);
 
@@ -143,40 +142,53 @@ impl Server {
         // NOTE: i shouldn't be locking session_state for the whole function but since we are only
         // receiving files one by one, it should be fine. Shouldn't be locking for the whole
         // function if we are going to receive multiple files at the same time.
-        let mut session = session_state.lock().await;
-        if session.receive_session.is_none() {
-            return Err((
-                StatusCode::INTERNAL_SERVER_ERROR,
-                "Call to /send without requesting a send".into(),
-            ));
-        }
 
-        let _ = session
-            .server_tx
-            .send(ServerMessage::SendFileRequest((params.file_id.clone(), 0)));
+        let (file_id, path, sender) = {
+            let mut session = session_state.lock().await;
+            if session.receive_session.is_none() {
+                return Err((
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "Call to /send without requesting a send".into(),
+                ));
+            }
 
-        if !session
-            .receive_session
-            .as_ref()
-            .unwrap()
-            .files
-            .contains_key(&params.file_id)
-        {
-            return Err((
-                StatusCode::INTERNAL_SERVER_ERROR,
-                format!("Call to /send with unknown file id {}", params.file_id).into(),
-            ));
-        }
+            let _ = session
+                .server_tx
+                .send(ServerMessage::SendFileRequest((params.file_id.clone(), 0)));
 
-        let sender = session.server_tx.clone();
-        let mut receive_session = session.receive_session.as_mut().unwrap();
-        receive_session.status = ReceiveStatus::Receiving;
+            if !session
+                .receive_session
+                .as_ref()
+                .unwrap()
+                .files
+                .contains_key(&params.file_id)
+            {
+                return Err((
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    format!("Call to /send with unknown file id {}", params.file_id).into(),
+                ));
+            }
 
-        let file_id = params.file_id.clone();
-        let path = Path::new(&receive_session.destination_directory)
-            .join(&receive_session.files[&params.file_id].file_name);
+            let mut receive_session = session.receive_session.as_mut().unwrap();
+            receive_session.status = ReceiveStatus::Receiving;
+
+            let file_id = params.file_id.clone();
+            let path = Path::new(&receive_session.destination_directory)
+                .join(&receive_session.files[&params.file_id].file_name);
+            (file_id, path, session.server_tx.clone())
+        };
 
         let result = stream_to_file(path, file_stream, file_id.clone(), sender).await;
+
+        let mut session = session_state.lock().await;
+        if session.receive_session.is_none() {
+            // TODO(notjedi): should i return Ok(()) here?
+            return Err((
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Session might have been cancelled while receiving file".into(),
+            ));
+        }
+        let mut receive_session = session.receive_session.as_mut().unwrap();
 
         receive_session
             .file_status
