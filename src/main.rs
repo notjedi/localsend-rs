@@ -155,10 +155,10 @@ async fn async_main() -> Result<(), io::Error> {
 fn start_device_scanner() {
     // NOTE: https://ryhl.io/blog/async-what-is-blocking recommends that we run functions that run
     // forever in a separate thread.
-    tokio::task::spawn_blocking(|| {
-        let mut server = DeviceScanner::new();
-        server.announce_multicast_repeated();
-        server.listen_and_announce_multicast();
+    tokio::task::spawn(async move {
+        let mut server = DeviceScanner::new().await;
+        server.announce_multicast_repeated().await;
+        server.listen_and_announce_multicast().await;
     });
 }
 
