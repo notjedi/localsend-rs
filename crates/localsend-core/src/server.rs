@@ -81,7 +81,8 @@ impl Server {
             ));
         }
 
-        // TODO: check if cancel request is valid by comparing the ip address
+        // TODO(notjedi): check if cancel request is valid by comparing the ip address
+        // TODO(notjedi): clear buffer of sender_tx
         let _ = session.server_tx.send(ServerMessage::CancelSession);
 
         session.receive_session = None;
