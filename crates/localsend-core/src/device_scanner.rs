@@ -97,7 +97,7 @@ impl DeviceScanner {
         self.this_device.announcement = true;
         let send_socket = self.socket.clone();
         let announce_msg = serde_json::to_string(&self.this_device).unwrap();
-        tokio::task::spawn(Self::announce_repeat(
+        tokio::spawn(Self::announce_repeat(
             send_socket,
             announce_msg,
             (self.multicast_addr, self.multicast_port),

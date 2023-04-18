@@ -153,9 +153,20 @@ async fn handle_server_msgs(
     }
 }
 
+async fn start_device_scanner() {
+    let mut device_scanner = DeviceScanner::new(
+        ALIAS.to_string(),
+        INTERFACE_ADDR,
+        MULTICAST_ADDR,
+        MULTICAST_PORT,
+    )
+    .await;
+    device_scanner.listen_and_announce_multicast().await;
+}
+
 async fn async_main() -> Result<(), io::Error> {
     // spawn task to listen and announce multicast messages
-    start_device_scanner();
+    tokio::spawn(start_device_scanner());
 
     let (server_tx, server_rx) = mpsc::unbounded_channel();
     let (client_tx, client_rx) = mpsc::unbounded_channel();
@@ -165,19 +176,6 @@ async fn async_main() -> Result<(), io::Error> {
     let server = Server::new(INTERFACE_ADDR, MULTICAST_PORT);
     server.start_server(server_tx, client_rx).await;
     Ok(())
-}
-
-fn start_device_scanner() {
-    tokio::task::spawn(async move {
-        let mut server = DeviceScanner::new(
-            ALIAS.to_string(),
-            INTERFACE_ADDR,
-            MULTICAST_ADDR,
-            MULTICAST_PORT,
-        )
-        .await;
-        server.listen_and_announce_multicast().await;
-    });
 }
 
 fn init_tracing_logger() {
