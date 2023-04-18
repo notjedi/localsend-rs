@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use std::fmt::Write;
 use std::io;
+use std::net::Ipv4Addr;
 use std::time::Duration;
 
 use console::style;
@@ -13,6 +14,10 @@ use tokio::sync::mpsc;
 use tracing::{debug, info};
 use tracing_subscriber::filter::EnvFilter;
 use tracing_subscriber::FmtSubscriber;
+
+const INTERFACE_ADDR: Ipv4Addr = Ipv4Addr::new(0, 0, 0, 0);
+const MULTICAST_ADDR: Ipv4Addr = Ipv4Addr::new(224, 0, 0, 167);
+const MULTICAST_PORT: u16 = 53317;
 
 struct State {
     multi_progress: MultiProgress,
@@ -59,7 +64,7 @@ async fn handle_server_msgs(
                             .map(|file_info| file_info.file_name.as_str())
                             .collect::<Vec<&str>>(),
                     )
-                    .defaults(&vec![true; send_request.files.len()].as_slice())
+                    .defaults(vec![true; send_request.files.len()].as_slice())
                     .interact()
                     .unwrap();
 
@@ -93,7 +98,7 @@ async fn handle_server_msgs(
                                     .with_key("eta", |state: &ProgressState, w: &mut dyn Write| write!(w, "{:.1}s", state.eta().as_secs_f64()).unwrap())
                                     .progress_chars("#>-"));
 
-                                pb.set_message(file_info.file_name.clone());
+                                pb.set_message(file_info.file_name);
                                 (file_id, pb)
                             })
                             .collect::<HashMap<String, ProgressBar>>();
@@ -124,7 +129,7 @@ async fn handle_server_msgs(
             },
             ServerMessage::CancelSession => match client_state.as_ref() {
                 Some(state) => {
-                    for (_, pb) in &state.progress_map {
+                    for pb in state.progress_map.values() {
                         pb.finish_and_clear();
                         state.multi_progress.println("Finished with error").unwrap();
                     }
@@ -147,14 +152,14 @@ async fn async_main() -> Result<(), io::Error> {
 
     tokio::spawn(handle_server_msgs(server_rx, client_tx));
 
-    let server = Server::new();
+    let server = Server::new(INTERFACE_ADDR, MULTICAST_PORT);
     server.start_server(server_tx, client_rx).await;
-    return Ok(());
+    Ok(())
 }
 
 fn start_device_scanner() {
     tokio::task::spawn(async move {
-        let mut server = DeviceScanner::new().await;
+        let mut server = DeviceScanner::new(INTERFACE_ADDR, MULTICAST_ADDR, MULTICAST_PORT).await;
         server.listen_and_announce_multicast().await;
     });
 }

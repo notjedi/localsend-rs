@@ -11,7 +11,7 @@ use axum::{
 };
 use axum_server::tls_rustls::RustlsConfig;
 use futures::{Stream, TryStreamExt};
-use std::{collections::HashMap, path::Path};
+use std::{collections::HashMap, net::Ipv4Addr, path::Path};
 use std::{io, net::SocketAddr};
 use std::{path::PathBuf, sync::Arc};
 use tokio::{fs::File, io::BufWriter};
@@ -25,18 +25,16 @@ use uuid::Uuid;
 
 pub struct Server {
     certificate: rcgen::Certificate,
-}
-
-impl Default for Server {
-    fn default() -> Self {
-        Self::new()
-    }
+    interface_addr: Ipv4Addr,
+    multicast_port: u16,
 }
 
 impl Server {
-    pub fn new() -> Self {
+    pub fn new(interface_addr: Ipv4Addr, multicast_port: u16) -> Self {
         Self {
             certificate: utils::generate_tls_cert(),
+            interface_addr,
+            multicast_port,
         }
     }
 
@@ -63,7 +61,7 @@ impl Server {
             .route("/api/localsend/v1/cancel", post(Self::cancel))
             .with_state(app_state);
 
-        let addr = SocketAddr::from(([0, 0, 0, 0], crate::MULTICAST_PORT));
+        let addr = SocketAddr::from((self.interface_addr, self.multicast_port));
         info!("listening on {}", addr);
         axum_server::bind_rustls(addr, config)
             .serve(app.into_make_service())
@@ -82,6 +80,7 @@ impl Server {
         }
 
         // TODO(notjedi): check if cancel request is valid by comparing the ip address
+        // TODO(notjedi): set session_state.receive_session to None
         // TODO(notjedi): clear buffer of sender_tx
         let _ = session.server_tx.send(ServerMessage::CancelSession);
 
@@ -108,7 +107,7 @@ impl Server {
 
         match response {
             Some(ClientMessage::Decline) | None => {
-                return Err((StatusCode::FORBIDDEN, "User declined the request".into()));
+                Err((StatusCode::FORBIDDEN, "User declined the request".into()))
             }
             Some(ClientMessage::Allow(file_ids)) => {
                 // TODO: create destination_directory if it doesn't exist
@@ -130,7 +129,7 @@ impl Server {
                 trace!("{:#?}", &wanted_files);
                 trace!("{:#?}, ", &state.files);
 
-                return Ok(Json(wanted_files));
+                Ok(Json(wanted_files))
             }
         }
     }
@@ -166,7 +165,7 @@ impl Server {
             {
                 return Err((
                     StatusCode::INTERNAL_SERVER_ERROR,
-                    format!("Call to /send with unknown file id {}", params.file_id).into(),
+                    format!("Call to /send with unknown file id {}", params.file_id),
                 ));
             }
 
@@ -206,13 +205,14 @@ impl Server {
             receive_session.file_status[file_status_id] == ReceiveStatus::Finished
                 || receive_session.file_status[file_status_id] == ReceiveStatus::FinishedWithErrors
         });
+        // TODO(notjedi): do i need to loop over everything and set the status?
         if all_finished {
             // TODO: add support for FinishedWithErrors and send message to bin crate before
             // setting receive_session to None
             receive_session.status = ReceiveStatus::Finished;
             session.receive_session = None;
         }
-        return Ok(());
+        Ok(())
     }
 }
 
