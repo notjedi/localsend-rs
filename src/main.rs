@@ -15,6 +15,7 @@ use tracing::{debug, info};
 use tracing_subscriber::filter::EnvFilter;
 use tracing_subscriber::FmtSubscriber;
 
+const ALIAS: &str = "rustsend";
 const INTERFACE_ADDR: Ipv4Addr = Ipv4Addr::new(0, 0, 0, 0);
 const MULTICAST_ADDR: Ipv4Addr = Ipv4Addr::new(224, 0, 0, 167);
 const MULTICAST_PORT: u16 = 53317;
@@ -159,7 +160,13 @@ async fn async_main() -> Result<(), io::Error> {
 
 fn start_device_scanner() {
     tokio::task::spawn(async move {
-        let mut server = DeviceScanner::new(INTERFACE_ADDR, MULTICAST_ADDR, MULTICAST_PORT).await;
+        let mut server = DeviceScanner::new(
+            ALIAS.to_string(),
+            INTERFACE_ADDR,
+            MULTICAST_ADDR,
+            MULTICAST_PORT,
+        )
+        .await;
         server.listen_and_announce_multicast().await;
     });
 }

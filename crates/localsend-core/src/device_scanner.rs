@@ -12,7 +12,7 @@ use crate::{
     utils::get_device_ip_addr,
     NUM_REPEAT,
 };
-use crate::{ALIAS, BUFFER_SIZE, DEVICE_MODEL, DEVICE_TYPE};
+use crate::{BUFFER_SIZE, DEVICE_MODEL, DEVICE_TYPE};
 
 pub struct DeviceScanner {
     pub socket: Arc<UdpSocket>,
@@ -26,6 +26,7 @@ pub struct DeviceScanner {
 impl DeviceScanner {
     // TODO(notjedi): is it a good idea for a new func o be async
     pub async fn new(
+        device_alias: String,
         interface_addr: Ipv4Addr,
         multicast_addr: Ipv4Addr,
         multicast_port: u16,
@@ -39,7 +40,7 @@ impl DeviceScanner {
         let ip_addr = get_device_ip_addr().unwrap_or(IpAddr::V4([0, 0, 0, 0].into()));
 
         let device_info = DeviceInfo {
-            alias: ALIAS.to_string(),
+            alias: device_alias,
             device_type: DEVICE_TYPE.to_string(),
             device_model: Some(DEVICE_MODEL.to_string()),
             ip: ip_addr.to_string(),
@@ -66,6 +67,7 @@ impl DeviceScanner {
         announcement_msg: &str,
         addr: (Ipv4Addr, u16),
     ) {
+        // TODO(notjedi): any other way to not accept addr as argument
         send_socket
             .send_to(announcement_msg.as_bytes(), addr)
             .await
@@ -77,6 +79,7 @@ impl DeviceScanner {
         announcement_msg: String,
         addr: (Ipv4Addr, u16),
     ) {
+        // TODO(notjedi): any other way to not accept addr as argument
         loop {
             for _ in 0..NUM_REPEAT {
                 Self::announce(&send_socket, announcement_msg.as_str(), addr).await;
