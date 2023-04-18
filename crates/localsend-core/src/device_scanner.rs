@@ -63,8 +63,8 @@ impl DeviceScanner {
         loop {
             for _ in 0..NUM_REPEAT {
                 Self::announce(&send_socket, announcement_msg.as_str()).await;
-                tokio::time::sleep(Duration::from_secs(5)).await;
             }
+            tokio::time::sleep(Duration::from_secs(5)).await;
         }
     }
 
@@ -76,8 +76,11 @@ impl DeviceScanner {
 
         self.this_device.announcement = true;
         let send_socket = self.socket.clone();
-        let announcement_msg = serde_json::to_string(&self.this_device).unwrap();
-        tokio::task::spawn(Self::announce_repeat(send_socket, announcement_msg));
+        let announce_msg = serde_json::to_string(&self.this_device).unwrap();
+        tokio::task::spawn(Self::announce_repeat(send_socket, announce_msg));
+
+        self.this_device.announcement = false;
+        let reply_announce_msg = serde_json::to_string(&self.this_device).unwrap();
 
         let mut buf = [0u8; BUFFER_SIZE as usize];
         loop {
@@ -94,9 +97,7 @@ impl DeviceScanner {
                 }
 
                 if device_response.announcement {
-                    self.this_device.announcement = false;
-                    let announcement_msg = serde_json::to_string(&self.this_device).unwrap();
-                    Self::announce(&self.socket, announcement_msg.as_str()).await;
+                    Self::announce(&self.socket, reply_announce_msg.as_str()).await;
                 }
 
                 if !self.devices.contains(&device_response.device_info) {
