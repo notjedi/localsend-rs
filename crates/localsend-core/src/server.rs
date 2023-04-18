@@ -56,9 +56,18 @@ impl Server {
         }));
 
         let app = Router::new()
-            .route("/api/localsend/v1/send-request", post(Self::send_request))
-            .route("/api/localsend/v1/send", post(Self::incoming_send_post))
-            .route("/api/localsend/v1/cancel", post(Self::cancel))
+            .route(
+                "/api/localsend/v1/send-request",
+                post(Self::handle_send_request),
+            )
+            .route(
+                "/api/localsend/v1/send",
+                post(Self::handle_send_file_request),
+            )
+            .route(
+                "/api/localsend/v1/cancel",
+                post(Self::handle_cancel_request),
+            )
             .with_state(app_state);
 
         let addr = SocketAddr::from((self.interface_addr, self.multicast_port));
@@ -69,7 +78,9 @@ impl Server {
             .unwrap();
     }
 
-    async fn cancel(State(session_state): State<ReceiveState>) -> Result<(), (StatusCode, String)> {
+    async fn handle_cancel_request(
+        State(session_state): State<ReceiveState>,
+    ) -> Result<(), (StatusCode, String)> {
         let mut session = session_state.lock().await;
         if session.receive_session.is_none() {
             // reject incoming request if another session is ongoing
@@ -88,7 +99,7 @@ impl Server {
         Ok(())
     }
 
-    async fn send_request(
+    async fn handle_send_request(
         State(session_state): State<ReceiveState>,
         Json(send_request): Json<SendRequest>,
     ) -> Result<Json<HashMap<String, String>>, (StatusCode, String)> {
@@ -134,7 +145,7 @@ impl Server {
         }
     }
 
-    async fn incoming_send_post(
+    async fn handle_send_file_request(
         State(session_state): State<ReceiveState>,
         params: Query<SendInfo>,
         file_stream: BodyStream,
