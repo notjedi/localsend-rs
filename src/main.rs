@@ -129,10 +129,19 @@ async fn handle_server_msgs(
                 }
             },
             ServerMessage::CancelSession => match client_state.as_ref() {
+                // TODO(notjedi): handle cancel request when in send request phase
                 Some(state) => {
-                    for pb in state.progress_map.values() {
-                        pb.finish_and_clear();
-                        state.multi_progress.println("Finished with error").unwrap();
+                    for (file_id, pb) in &state.progress_map {
+                        if !pb.is_finished() {
+                            pb.finish_and_clear();
+                            state
+                                .multi_progress
+                                .println(format!(
+                                    "{} finished with error",
+                                    state.files[file_id.as_str()].file_name
+                                ))
+                                .unwrap();
+                        }
                     }
                     client_state = None;
                 }
