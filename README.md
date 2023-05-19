@@ -3,7 +3,7 @@
 a cli for localsend
 
 <div align="center">
-  <video src=".github/assets/demo.mp4" type="video/mp4"></video>
+  <video src="https://github.com/notjedi/localsend-rs/assets/30691152/6bedeb44-1dd8-4f72-8a8d-c1c2be715a26" type="video/mp4"></video>
 </div>
 
 the current idea for sending files is to make the server an Arc type in the bin
