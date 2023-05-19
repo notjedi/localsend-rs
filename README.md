@@ -2,6 +2,17 @@
 
 a cli for localsend
 
+<div align="center">
+  <video src=".github/assets/demo.mp4" type="video/mp4"></video>
+</div>
+
+the current idea for sending files is to make the server an Arc type in the bin
+and spawn 2 tokio tasks - one to listen for messages from client and call
+corresponding methods to send files and another one to do what we do now which
+is to recv files.
+
+a small todo: `use mem::take` when ever possible, to avoid clones.
+
 ## Roadmap
 
 - [x] receive files
