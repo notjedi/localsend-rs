@@ -1,19 +1,13 @@
-use std::collections::HashMap;
-use std::fmt::Write;
-use std::io;
-use std::net::Ipv4Addr;
-use std::time::Duration;
+use std::{collections::HashMap, fmt::Write, io, net::Ipv4Addr, time::Duration};
 
 use console::style;
-use dialoguer::theme::ColorfulTheme;
-use dialoguer::MultiSelect;
+use dialoguer::{theme::ColorfulTheme, MultiSelect};
 use indicatif::{MultiProgress, ProgressBar, ProgressState, ProgressStyle};
-use localsend_core::{ClientMessage, DeviceScanner, FileInfo, Server, ServerMessage};
-use tokio::runtime;
-use tokio::sync::mpsc;
+use tokio::{runtime, sync::mpsc};
 use tracing::{debug, info};
-use tracing_subscriber::filter::EnvFilter;
-use tracing_subscriber::FmtSubscriber;
+use tracing_subscriber::{filter::EnvFilter, FmtSubscriber};
+
+use localsend_core::{ClientMessage, DeviceScanner, FileInfo, Server, ServerMessage};
 
 const ALIAS: &str = "rustsend";
 const INTERFACE_ADDR: Ipv4Addr = Ipv4Addr::new(0, 0, 0, 0);

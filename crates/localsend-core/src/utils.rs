@@ -1,7 +1,7 @@
-use rcgen::{Certificate, CertificateParams, DnType, DnValue};
 use std::net::IpAddr;
 
 use network_interface::{NetworkInterface, NetworkInterfaceConfig};
+use rcgen::{Certificate, CertificateParams, DnType, DnValue};
 
 pub(crate) fn get_device_ip_addr() -> Option<IpAddr> {
     for network_interface in NetworkInterface::show().unwrap_or(vec![]).iter() {
