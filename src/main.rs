@@ -21,7 +21,8 @@ struct State {
 }
 
 fn main() {
-    init_tracing_logger();
+    console_subscriber::init();
+    // init_tracing_logger();
     // TODO: should i use new_current_thread or new_multi_thread?
     let runtime = runtime::Builder::new_current_thread()
         .enable_all()

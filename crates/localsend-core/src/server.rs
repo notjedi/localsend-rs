@@ -186,7 +186,7 @@ impl Server {
                 ));
             }
 
-            let mut receive_session = session.receive_session.as_mut().unwrap();
+            let receive_session = session.receive_session.as_mut().unwrap();
             receive_session.status = ReceiveStatus::Receiving;
 
             let file_id = params.file_id.clone();
@@ -205,7 +205,7 @@ impl Server {
                 "Session might have been cancelled while receiving file".into(),
             ));
         }
-        let mut receive_session = session.receive_session.as_mut().unwrap();
+        let receive_session = session.receive_session.as_mut().unwrap();
 
         receive_session
             .file_status
